@@ -1,0 +1,211 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 248 250 252;
+    --foreground: 15 23 42;
+    --card: 255 255 255;
+    --card-foreground: 15 23 42;
+    --border: 226 232 240;
+    --input: 226 232 240;
+    --ring: 37 99 235;
+    --radius: 0.625rem;
+
+    /* Brand tokens */
+    --navy-900: #0F172A;
+    --navy-800: #1E293B;
+    --navy-700: #334155;
+    --navy-600: #475569;
+    --navy-500: #64748B;
+    --navy-400: #94A3B8;
+    --navy-300: #CBD5E1;
+    --navy-200: #E2E8F0;
+    --navy-100: #F1F5F9;
+    --navy-50: #F8FAFC;
+
+    --accent-600: #2563EB;
+    --accent-500: #3B82F6;
+    --accent-100: #DBEAFE;
+    --accent-50: #EFF6FF;
+
+    --success: #10B981;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+  }
+
+  .dark {
+    --background: 15 23 42;
+    --foreground: 248 250 252;
+    --card: 30 41 59;
+    --card-foreground: 248 250 252;
+    --border: 51 65 85;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  body {
+    @apply bg-background text-text-primary font-sans text-sm;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer components {
+  /* ─── Card variants ─── */
+  .card {
+    @apply bg-surface rounded-lg border border-border shadow-card p-6;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+
+  /* ─── Badge ─── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning/10 text-warning;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger/10 text-danger;
+  }
+
+  .badge-accent {
+    @apply badge bg-accent/10 text-accent;
+  }
+
+  .badge-neutral {
+    @apply badge bg-navy-100 text-navy-600;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-accent/40 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-700 active:bg-accent-800;
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface border border-border text-text-primary hover:bg-navy-50 active:bg-navy-100;
+  }
+
+  .btn-ghost {
+    @apply btn text-text-secondary hover:bg-navy-100 hover:text-text-primary;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger text-white hover:bg-red-600 active:bg-red-700;
+  }
+
+  /* ─── Input ─── */
+  .input {
+    @apply w-full px-3 py-2 rounded-md border border-border bg-surface text-text-primary text-sm
+           placeholder:text-text-muted
+           focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent
+           transition-all duration-150;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-text-primary mb-1.5;
+  }
+
+  /* ─── Table ─── */
+  .data-table {
+    @apply w-full border-collapse;
+  }
+
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider 
+           border-b border-border bg-navy-50;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 text-sm text-text-primary border-b border-border;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-navy-50/60;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium
+           text-navy-400 cursor-pointer transition-all duration-150
+           hover:text-white;
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  .sidebar-item:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+  }
+
+  .sidebar-item-active {
+    @apply sidebar-item text-white;
+    background-color: rgba(37, 99, 235, 0.18);
+  }
+
+  /* ─── Stat card ─── */
+  .stat-card {
+    @apply card flex flex-col gap-1;
+  }
+
+  /* ─── Section header ─── */
+  .section-title {
+    @apply text-lg font-semibold text-text-primary;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-text-primary;
+  }
+
+  /* ─── Scrollbar ─── */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #CBD5E1;
+    border-radius: 10px;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent to-blue-400 bg-clip-text text-transparent;
+  }
+}
