@@ -65,7 +65,7 @@ router.post('/subscribe', authenticate, async (req: AuthRequest, res: Response, 
 
     res.json({
       success: true,
-      message: \`Successfully upgraded to \${plan.name} plan.\`,
+      message: `Successfully upgraded to ${plan.name} plan.`,
       data: subscription
     });
   } catch (err) { next(err); }

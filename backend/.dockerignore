@@ -1,0 +1,17 @@
+# Ignore node_modules as they will be installed inside the container
+node_modules
+npm-debug.log
+
+# Ignore build output
+dist
+
+# Ignore local environment files and git configurations
+.env
+.env.*
+.git
+.gitignore
+
+# Ignore Docker-related files
+Dockerfile
+docker-compose*
+README.md

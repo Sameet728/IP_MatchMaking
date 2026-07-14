@@ -3,8 +3,14 @@ import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 // import { ChatOpenAI } from '@langchain/openai'; // Uncomment to use OpenAI
 import { HumanMessage } from '@langchain/core/messages';
 
-// 1. Swap the model here with just 2 lines!
-const model = new ChatGoogleGenerativeAI({ model: "gemini-2.5-flash", temperature: 0.2 });
+// 1. Instantiated lazily only if API keys are present to prevent crashes on startup
+let model: ChatGoogleGenerativeAI | null = null;
+const getModel = () => {
+  if (!model) {
+    model = new ChatGoogleGenerativeAI({ model: "gemini-2.5-flash", temperature: 0.2 });
+  }
+  return model;
+};
 // const model = new ChatOpenAI({ model: "gpt-4o-mini", temperature: 0.2 });
 
 export const processAIAnalysisJob = async (jobId: string, patentId: string) => {
@@ -62,7 +68,12 @@ export const processAIAnalysisJob = async (jobId: string, patentId: string) => {
         }
       `;
 
-      const response = await model.invoke([new HumanMessage(prompt)]);
+      // Pass GEMINI_API_KEY to the Google-specific env var if not already set
+      if (process.env.GEMINI_API_KEY && !process.env.GOOGLE_API_KEY) {
+        process.env.GOOGLE_API_KEY = process.env.GEMINI_API_KEY;
+      }
+
+      const response = await getModel().invoke([new HumanMessage(prompt)]);
       
       let text = response.content.toString().trim();
       if (text.startsWith('\`\`\`json')) text = text.slice(7);

@@ -171,7 +171,7 @@ router.post('/:id/messages', authenticate, async (req: AuthRequest, res: Respons
     // Broadcast to WebSocket Deal Room
     const { getIO } = require('../lib/socket');
     try {
-      getIO().to(\`deal_\${dealId}\`).emit('new_message', message);
+      getIO().to(`deal_${dealId}`).emit('new_message', message);
     } catch (e) {
       console.error('Socket emission failed:', e);
     }
