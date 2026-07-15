@@ -2,9 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AppError } from '../middleware/errorHandler';
-import { UserRole } from '@prisma/client';
+import { UserRole } from '../types/enums';
 import { sendOTP, sendPasswordReset } from '../lib/email';
 import { logAudit } from '../lib/audit';
 
@@ -28,7 +28,6 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
   try {
     const { email, password, name, role, organizationName, organizationType } = req.body;
 
-    // Validate required fields
     if (!email || !password || !name || !role) {
       throw new AppError('Email, password, name, and role are required.', 400);
     }
@@ -41,56 +40,45 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       throw new AppError('Password must be at least 8 characters long.', 400);
     }
 
-    // Check if user already exists
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (existing) throw new AppError('An account with this email already exists.', 409);
+    const { rows } = await db.query('SELECT id FROM "User" WHERE email = $1', [email.toLowerCase()]);
+    if (rows.length > 0) throw new AppError('An account with this email already exists.', 409);
 
     const passwordHash = await bcrypt.hash(password, 12);
     const otp = generateOTP();
-    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); 
 
-    // Create organization if needed
     let organizationId: string | undefined;
     if (organizationName) {
-      const org = await prisma.organization.create({
-        data: {
-          name: organizationName,
-          type: role as UserRole,
-          ...(organizationType && { industry: organizationType }),
-        },
-      });
-      organizationId = org.id;
+      const orgId = uuidv4();
+      await db.query(
+        'INSERT INTO "Organization" (id, name, type, industry, "updatedAt") VALUES ($1, $2, $3, $4, NOW())',
+        [orgId, organizationName, role, organizationType || null]
+      );
+      organizationId = orgId;
     }
 
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        passwordHash,
-        name,
-        role: role as UserRole,
-        otpCode: otp,
-        otpExpiresAt: otpExpiry,
-        ...(organizationId && { organizationId }),
-      },
-      select: {
-        id: true, email: true, name: true, role: true,
-        organizationId: true, status: true, createdAt: true,
-      },
-    });
+    const userId = uuidv4();
+    await db.query(
+      `INSERT INTO "User" (id, email, "passwordHash", name, role, "otpCode", "otpExpiresAt", "organizationId", status, "updatedAt") 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING_VERIFICATION', NOW())`,
+      [userId, email.toLowerCase(), passwordHash, name, role, otp, otpExpiry, organizationId || null]
+    );
+
+    const user = { id: userId, email: email.toLowerCase(), name, role, organizationId, status: 'PENDING_VERIFICATION', createdAt: new Date() };
 
     // Send OTP via Resend
     await sendOTP(email.toLowerCase(), otp);
 
-    // Audit log
-    await prisma.auditLog.create({
-      data: { userId: user.id, action: 'REGISTER', entity: 'User', entityId: user.id },
-    });
+    const auditId = uuidv4();
+    await db.query(
+      `INSERT INTO "AuditLog" (id, "userId", action, entity, "entityId") VALUES ($1, $2, $3, $4, $5)`,
+      [auditId, user.id, 'REGISTER', 'User', user.id]
+    );
 
     res.status(201).json({
       success: true,
       message: 'Registration successful. Please verify your email with the OTP sent.',
       user,
-      // Only return OTP in dev for testing
       ...(process.env.NODE_ENV === 'development' && { _devOtp: otp }),
     });
   } catch (err) {
@@ -104,31 +92,22 @@ export const verifyOTP = async (req: Request, res: Response, next: NextFunction)
     const { email, otp } = req.body;
     if (!email || !otp) throw new AppError('Email and OTP are required.', 400);
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const { rows } = await db.query('SELECT * FROM "User" WHERE email = $1', [email.toLowerCase()]);
+    const user = rows[0];
     if (!user) throw new AppError('User not found.', 404);
     if (user.emailVerified) throw new AppError('Email already verified.', 400);
 
     if (!user.otpCode || user.otpCode !== otp) throw new AppError('Invalid OTP.', 400);
-    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) throw new AppError('OTP expired. Request a new one.', 400);
+    if (!user.otpExpiresAt || new Date(user.otpExpiresAt) < new Date()) throw new AppError('OTP expired. Request a new one.', 400);
 
     const { accessToken, refreshToken } = generateTokens({
       id: user.id, email: user.email, role: user.role, organizationId: user.organizationId,
     });
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerified: true,
-        emailVerifiedAt: new Date(),
-        status: 'ACTIVE',
-        otpCode: null,
-        otpExpiresAt: null,
-        refreshToken,
-        refreshTokenExp: new Date(Date.now() + 7 * 24 * 3600 * 1000),
-        lastLoginAt: new Date(),
-        loginCount: { increment: 1 },
-      },
-    });
+    await db.query(
+      `UPDATE "User" SET "emailVerified" = true, "emailVerifiedAt" = NOW(), status = 'ACTIVE', "otpCode" = null, "otpExpiresAt" = null, "refreshToken" = $1, "refreshTokenExp" = $2, "lastLoginAt" = NOW(), "loginCount" = "loginCount" + 1, "updatedAt" = NOW() WHERE id = $3`,
+      [refreshToken, new Date(Date.now() + 7 * 24 * 3600 * 1000), user.id]
+    );
 
     res.json({
       success: true,
@@ -151,10 +130,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const { email, password } = req.body;
     if (!email || !password) throw new AppError('Email and password are required.', 400);
 
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: { organization: { select: { id: true, name: true, type: true } } },
-    });
+    const { rows } = await db.query('SELECT * FROM "User" WHERE email = $1', [email.toLowerCase()]);
+    const user = rows[0];
 
     if (!user) throw new AppError('Invalid email or password.', 401);
 
@@ -169,20 +146,16 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       id: user.id, email: user.email, role: user.role, organizationId: user.organizationId,
     });
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        refreshToken,
-        refreshTokenExp: new Date(Date.now() + 7 * 24 * 3600 * 1000),
-        lastLoginAt: new Date(),
-        loginCount: { increment: 1 },
-      },
-    });
+    await db.query(
+      `UPDATE "User" SET "refreshToken" = $1, "refreshTokenExp" = $2, "lastLoginAt" = NOW(), "loginCount" = "loginCount" + 1, "updatedAt" = NOW() WHERE id = $3`,
+      [refreshToken, new Date(Date.now() + 7 * 24 * 3600 * 1000), user.id]
+    );
 
-    await logAudit({
-      userId: user.id, action: 'LOGIN', entity: 'User', entityId: user.id,
-      ipAddress: req.ip, userAgent: req.headers['user-agent'],
-    });
+    let organization = null;
+    if (user.organizationId) {
+      const orgRes = await db.query('SELECT id, name, type FROM "Organization" WHERE id = $1', [user.organizationId]);
+      organization = orgRes.rows[0];
+    }
 
     res.json({
       success: true,
@@ -191,7 +164,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       user: {
         id: user.id, email: user.email, name: user.name, role: user.role,
         avatar: user.avatar, organizationId: user.organizationId,
-        organization: user.organization,
+        organization,
       },
     });
   } catch (err) {
@@ -207,23 +180,21 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
 
     const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET!) as { id: string };
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, email: true, role: true, organizationId: true, refreshToken: true, refreshTokenExp: true, status: true },
-    });
+    const { rows } = await db.query('SELECT id, email, role, "organizationId", "refreshToken", "refreshTokenExp", status FROM "User" WHERE id = $1', [decoded.id]);
+    const user = rows[0];
 
     if (!user || user.refreshToken !== token) throw new AppError('Invalid refresh token.', 401);
-    if (!user.refreshTokenExp || user.refreshTokenExp < new Date()) throw new AppError('Refresh token expired.', 401);
+    if (!user.refreshTokenExp || new Date(user.refreshTokenExp) < new Date()) throw new AppError('Refresh token expired.', 401);
     if (user.status !== 'ACTIVE') throw new AppError('Account is not active.', 403);
 
     const tokens = generateTokens({
       id: user.id, email: user.email, role: user.role, organizationId: user.organizationId,
     });
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: tokens.refreshToken, refreshTokenExp: new Date(Date.now() + 7 * 24 * 3600 * 1000) },
-    });
+    await db.query(
+      `UPDATE "User" SET "refreshToken" = $1, "refreshTokenExp" = $2, "updatedAt" = NOW() WHERE id = $3`,
+      [tokens.refreshToken, new Date(Date.now() + 7 * 24 * 3600 * 1000), user.id]
+    );
 
     res.json({ success: true, ...tokens });
   } catch (err) {
@@ -238,10 +209,10 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
     if (token) {
       const decoded = jwt.decode(token) as { id?: string } | null;
       if (decoded?.id) {
-        await prisma.user.updateMany({
-          where: { id: decoded.id, refreshToken: token },
-          data: { refreshToken: null, refreshTokenExp: null },
-        });
+        await db.query(
+          `UPDATE "User" SET "refreshToken" = null, "refreshTokenExp" = null, "updatedAt" = NOW() WHERE id = $1 AND "refreshToken" = $2`,
+          [decoded.id, token]
+        );
       }
     }
     res.json({ success: true, message: 'Logged out successfully.' });
@@ -256,7 +227,8 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     const { email } = req.body;
     if (!email) throw new AppError('Email is required.', 400);
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const { rows } = await db.query('SELECT id, email FROM "User" WHERE email = $1', [email.toLowerCase()]);
+    const user = rows[0];
 
     // Always return success to prevent email enumeration
     if (!user) {
@@ -264,10 +236,10 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
     }
 
     const otp = generateOTP();
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { otpCode: otp, otpExpiresAt: new Date(Date.now() + 15 * 60 * 1000) },
-    });
+    await db.query(
+      `UPDATE "User" SET "otpCode" = $1, "otpExpiresAt" = $2, "updatedAt" = NOW() WHERE id = $3`,
+      [otp, new Date(Date.now() + 15 * 60 * 1000), user.id]
+    );
 
     // Send password reset email via Resend
     await sendPasswordReset(email.toLowerCase(), otp);
@@ -289,23 +261,18 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     if (!email || !otp || !newPassword) throw new AppError('Email, OTP, and new password are required.', 400);
     if (newPassword.length < 8) throw new AppError('Password must be at least 8 characters.', 400);
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const { rows } = await db.query('SELECT id, "otpCode", "otpExpiresAt" FROM "User" WHERE email = $1', [email.toLowerCase()]);
+    const user = rows[0];
+    
     if (!user) throw new AppError('Invalid request.', 400);
     if (!user.otpCode || user.otpCode !== otp) throw new AppError('Invalid or expired OTP.', 400);
-    if (!user.otpExpiresAt || user.otpExpiresAt < new Date()) throw new AppError('OTP expired.', 400);
+    if (!user.otpExpiresAt || new Date(user.otpExpiresAt) < new Date()) throw new AppError('OTP expired.', 400);
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        otpCode: null,
-        otpExpiresAt: null,
-        refreshToken: null,
-        lastLoginAt: new Date(),
-        loginCount: { increment: 1 },
-      },
-    });
+    await db.query(
+      `UPDATE "User" SET "passwordHash" = $1, "otpCode" = null, "otpExpiresAt" = null, "refreshToken" = null, "lastLoginAt" = NOW(), "loginCount" = "loginCount" + 1, "updatedAt" = NOW() WHERE id = $2`,
+      [passwordHash, user.id]
+    );
 
     await logAudit({
       userId: user.id, action: 'PASSWORD_RESET', entity: 'User', entityId: user.id,
@@ -324,15 +291,17 @@ export const resendOTP = async (req: Request, res: Response, next: NextFunction)
     const { email } = req.body;
     if (!email) throw new AppError('Email is required.', 400);
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const { rows } = await db.query('SELECT id, "emailVerified" FROM "User" WHERE email = $1', [email.toLowerCase()]);
+    const user = rows[0];
+    
     if (!user) return res.json({ success: true, message: 'OTP sent if account exists.' });
     if (user.emailVerified) throw new AppError('Email already verified.', 400);
 
     const otp = generateOTP();
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { otpCode: otp, otpExpiresAt: new Date(Date.now() + 15 * 60 * 1000) },
-    });
+    await db.query(
+      `UPDATE "User" SET "otpCode" = $1, "otpExpiresAt" = $2, "updatedAt" = NOW() WHERE id = $3`,
+      [otp, new Date(Date.now() + 15 * 60 * 1000), user.id]
+    );
 
     // Resend OTP via Resend
     await sendOTP(email.toLowerCase(), otp);

@@ -1,20 +1,17 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AuthRequest } from '../middleware/authenticate';
 import { Response, NextFunction } from 'express';
-import { ReportType, ReportFormat } from '@prisma/client';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
 // GET /api/reports
 router.get('/', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const reports = await prisma.report.findMany({
-      where: { userId: req.user!.id },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ success: true, data: reports });
+    const { rows } = await db.query('SELECT * FROM "Report" WHERE "userId" = $1 ORDER BY "createdAt" DESC', [req.user!.id]);
+    res.json({ success: true, data: rows });
   } catch (err) { next(err); }
 });
 
@@ -22,44 +19,36 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response, next: Next
 router.post('/', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { type, name, format = 'PDF', period, params } = req.body;
-
-    const report = await prisma.report.create({
-      data: {
-        userId: req.user!.id,
-        type: type as ReportType,
-        name,
-        format: format as ReportFormat,
-        period,
-        params,
-        status: 'GENERATING',
-      },
-    });
-
-    // TODO: Queue report generation job (Phase 5B)
-    console.log(`📊 Report ${report.id} queued for generation`);
-
-    res.status(202).json({
-      success: true,
-      message: 'Report generation queued.',
-      data: report,
-    });
+    const id = uuidv4();
+    const { rows } = await db.query(`
+      INSERT INTO "Report" (id, "userId", type, name, format, period, params, status, "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'GENERATING', NOW())
+      RETURNING *
+    `, [id, req.user!.id, type, name, format, period, params ? JSON.stringify(params) : null]);
+    console.log(`📊 Report ${id} queued for generation`);
+    res.status(202).json({ success: true, message: 'Report generation queued.', data: rows[0] });
   } catch (err) { next(err); }
 });
 
 // PATCH /api/reports/:id/star
 router.patch('/:id/star', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const report = await prisma.report.findFirst({ where: { id: (req.params as Record<string, string>).id, userId: req.user!.id } });
-    if (!report) { res.status(404).json({ success: false, error: 'Report not found.' }); return; }
-    const updated = await prisma.report.update({ where: { id: (req.params as Record<string, string>).id }, data: { isStarred: !report.isStarred } });
-    res.json({ success: true, data: updated });
+    const id = (req.params as Record<string, string>).id;
+    const { rows: reportRows } = await db.query('SELECT * FROM "Report" WHERE id = $1 AND "userId" = $2', [id, req.user!.id]);
+    const report = reportRows[0];
+    if (!report) return res.status(404).json({ success: false, error: 'Report not found.' });
+    const { rows: updatedRows } = await db.query(`
+      UPDATE "Report" SET "isStarred" = $1, "updatedAt" = NOW() WHERE id = $2 RETURNING *
+    `, [!report.isStarred, id]);
+    res.json({ success: true, data: updatedRows[0] });
   } catch (err) { next(err); }
 });
 
 // DELETE /api/reports/:id
 router.delete('/:id', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    await prisma.report.deleteMany({ where: { id: (req.params as Record<string, string>).id, userId: req.user!.id } });
+    const id = (req.params as Record<string, string>).id;
+    await db.query('DELETE FROM "Report" WHERE id = $1 AND "userId" = $2', [id, req.user!.id]);
     res.json({ success: true, message: 'Report deleted.' });
   } catch (err) { next(err); }
 });
@@ -67,14 +56,10 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response, next
 // GET /api/reports/:id/download
 router.get('/:id/download', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const report = await prisma.report.findFirst({
-      where: { id: (req.params as Record<string, string>).id, userId: req.user!.id },
-    });
-    
-    if (!report) {
-      res.status(404).json({ success: false, error: 'Report not found' });
-      return;
-    }
+    const id = (req.params as Record<string, string>).id;
+    const { rows } = await db.query('SELECT * FROM "Report" WHERE id = $1 AND "userId" = $2', [id, req.user!.id]);
+    const report = rows[0];
+    if (!report) return res.status(404).json({ success: false, error: 'Report not found' });
 
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ margin: 50 });
@@ -99,7 +84,7 @@ router.get('/:id/download', authenticate, async (req: AuthRequest, res: Response
     doc.moveDown(0.5);
     doc.fontSize(11).fillColor('#475569');
     if (report.params) {
-      doc.text(JSON.stringify(report.params, null, 2));
+      doc.text(typeof report.params === 'string' ? report.params : JSON.stringify(report.params, null, 2));
     } else {
       doc.text('This is an automatically generated system report summarizing platform activities.');
       doc.moveDown();

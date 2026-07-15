@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { Server as HttpServer } from 'http';
-import { prisma } from './prisma';
+import { db } from './db';
 
 let io: Server;
 
@@ -21,7 +21,8 @@ export const initSocket = (server: HttpServer) => {
       if (!token) return next(new Error('Authentication error: No token provided'));
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret') as { id: string };
-      const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+      const { rows } = await db.query('SELECT * FROM "User" WHERE id = $1', [decoded.id]);
+      const user = rows[0];
       if (!user) return next(new Error('Authentication error: User not found'));
 
       socket.data.user = user;

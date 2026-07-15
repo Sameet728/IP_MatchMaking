@@ -1,94 +1,70 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AuthRequest } from '../middleware/authenticate';
 import { Response, NextFunction } from 'express';
 
 const router = Router();
 
-// GET /api/analytics/platform — Platform-wide stats (admin/broker)
 router.get('/platform', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const [
-      totalUsers, totalPatents, totalDeals, listedPatents,
-      activeDeals, totalRoyalties,
+      totalUsersRes, totalPatentsRes, totalDealsRes, listedPatentsRes,
+      activeDealsRes, totalRoyaltiesRes, domainStatsRes, dealPipelineRes, userRolesRes
     ] = await Promise.all([
-      prisma.user.count({ where: { status: 'ACTIVE' } }),
-      prisma.patent.count(),
-      prisma.deal.count(),
-      prisma.patent.count({ where: { isListed: true } }),
-      prisma.deal.count({ where: { status: { in: ['ACTIVE', 'NEGOTIATING', 'DUE_DILIGENCE'] } } }),
-      prisma.royalty.aggregate({ where: { status: 'PAID' }, _sum: { amount: true } }),
+      db.query(`SELECT COUNT(*) FROM "User" WHERE status = 'ACTIVE'`),
+      db.query(`SELECT COUNT(*) FROM "Patent"`),
+      db.query(`SELECT COUNT(*) FROM "Deal"`),
+      db.query(`SELECT COUNT(*) FROM "Patent" WHERE "isListed" = true`),
+      db.query(`SELECT COUNT(*) FROM "Deal" WHERE status IN ('ACTIVE', 'NEGOTIATING', 'DUE_DILIGENCE')`),
+      db.query(`SELECT SUM(amount) FROM "Royalty" WHERE status = 'PAID'`),
+      db.query(`SELECT domain, COUNT(*) FROM "Patent" GROUP BY domain ORDER BY COUNT(*) DESC`),
+      db.query(`SELECT status, COUNT(*) FROM "Deal" GROUP BY status`),
+      db.query(`SELECT role, COUNT(*) FROM "User" WHERE status = 'ACTIVE' GROUP BY role`)
     ]);
 
-    // Domain breakdown
-    const domainStats = await prisma.patent.groupBy({
-      by: ['domain'],
-      _count: { domain: true },
-      orderBy: { _count: { domain: 'desc' } },
-    });
-
-    // Deal status pipeline
-    const dealPipeline = await prisma.deal.groupBy({
-      by: ['status'],
-      _count: { status: true },
-    });
-
-    // User role distribution
-    const userRoles = await prisma.user.groupBy({
-      by: ['role'],
-      where: { status: 'ACTIVE' },
-      _count: { role: true },
-    });
-
-    // Monthly registration trend (last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    const recentUsers = await prisma.user.findMany({
-      where: { createdAt: { gte: sixMonthsAgo } },
-      select: { createdAt: true, role: true },
-    });
+    const { rows: recentUsers } = await db.query(`SELECT "createdAt", role FROM "User" WHERE "createdAt" >= $1`, [sixMonthsAgo]);
 
     res.json({
       success: true,
       data: {
         summary: {
-          totalUsers, totalPatents, totalDeals, listedPatents, activeDeals,
-          totalRoyaltiesCollected: totalRoyalties._sum.amount || 0,
+          totalUsers: parseInt(totalUsersRes.rows[0].count),
+          totalPatents: parseInt(totalPatentsRes.rows[0].count),
+          totalDeals: parseInt(totalDealsRes.rows[0].count),
+          listedPatents: parseInt(listedPatentsRes.rows[0].count),
+          activeDeals: parseInt(activeDealsRes.rows[0].count),
+          totalRoyaltiesCollected: parseFloat(totalRoyaltiesRes.rows[0].sum || '0'),
         },
-        domainBreakdown: domainStats.map(d => ({ domain: d.domain, count: d._count.domain })),
-        dealPipeline: dealPipeline.map(d => ({ status: d.status, count: d._count.status })),
-        userRoles: userRoles.map(u => ({ role: u.role, count: u._count.role })),
+        domainBreakdown: domainStatsRes.rows.map(d => ({ domain: d.domain, count: parseInt(d.count) })),
+        dealPipeline: dealPipelineRes.rows.map(d => ({ status: d.status, count: parseInt(d.count) })),
+        userRoles: userRolesRes.rows.map(u => ({ role: u.role, count: parseInt(u.count) })),
         recentGrowth: recentUsers,
       },
     });
   } catch (err) { next(err); }
 });
 
-// GET /api/analytics/my — Personal analytics for current user
 router.get('/my', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
 
-    const [patents, myDeals, royalties] = await Promise.all([
-      prisma.patent.findMany({
-        where: { inventorId: userId },
-        select: { id: true, title: true, status: true, domain: true, viewCount: true, inquiryCount: true, saveCount: true, createdAt: true },
-      }),
-      prisma.deal.findMany({
-        where: { participants: { some: { userId } } },
-        select: { id: true, title: true, status: true, upfrontFee: true, royaltyRate: true, createdAt: true },
-      }),
-      prisma.royalty.findMany({
-        where: { deal: { participants: { some: { userId } } } },
-        select: { amount: true, status: true, period: true, dueDate: true },
-      }),
+    const [patentsRes, myDealsRes, royaltiesRes] = await Promise.all([
+      db.query(`SELECT id, title, status, domain, "viewCount", "inquiryCount", "saveCount", "createdAt" FROM "Patent" WHERE "inventorId" = $1`, [userId]),
+      db.query(`SELECT d.id, d.title, d.status, d."upfrontFee", d."royaltyRate", d."createdAt" FROM "Deal" d JOIN "DealParticipant" dp ON dp."dealId" = d.id WHERE dp."userId" = $1`, [userId]),
+      db.query(`SELECT r.amount, r.status, r.period, r."dueDate" FROM "Royalty" r JOIN "DealParticipant" dp ON dp."dealId" = r."dealId" WHERE dp."userId" = $1`, [userId]),
     ]);
 
-    const totalViews = patents.reduce((s, p) => s + p.viewCount, 0);
-    const totalInquiries = patents.reduce((s, p) => s + p.inquiryCount, 0);
-    const totalEarned = royalties.filter(r => r.status === 'PAID').reduce((s, r) => s + r.amount, 0);
-    const pendingEarnings = royalties.filter(r => r.status === 'PENDING').reduce((s, r) => s + r.amount, 0);
+    const patents = patentsRes.rows;
+    const myDeals = myDealsRes.rows;
+    const royalties = royaltiesRes.rows;
+
+    const totalViews = patents.reduce((s, p) => s + parseInt(p.viewCount || '0'), 0);
+    const totalInquiries = patents.reduce((s, p) => s + parseInt(p.inquiryCount || '0'), 0);
+    const totalEarned = royalties.filter(r => r.status === 'PAID').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+    const pendingEarnings = royalties.filter(r => r.status === 'PENDING').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
 
     res.json({
       success: true,

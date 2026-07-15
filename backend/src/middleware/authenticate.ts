@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AppError } from './errorHandler';
-import { UserRole } from '@prisma/client';
+import { UserRole } from '../types/enums';
 
 // Extend Request type to include user
 export interface AuthRequest extends Request {
@@ -37,10 +37,8 @@ export const authenticate = async (
     };
 
     // Verify user still exists and is active
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, email: true, role: true, organizationId: true, status: true },
-    });
+    const { rows } = await db.query('SELECT id, email, role, "organizationId", status FROM "User" WHERE id = $1', [decoded.id]);
+    const user = rows[0];
 
     if (!user) throw new AppError('User no longer exists.', 401);
     if (user.status === 'SUSPENDED') throw new AppError('Account suspended. Contact support.', 403);
@@ -89,10 +87,8 @@ export const optionalAuth = async (
     const secret = process.env.JWT_SECRET!;
     const decoded = jwt.verify(token, secret) as { id: string; email: string; role: UserRole; organizationId: string | null };
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
-      select: { id: true, email: true, role: true, organizationId: true },
-    });
+    const { rows } = await db.query('SELECT id, email, role, "organizationId" FROM "User" WHERE id = $1', [decoded.id]);
+    const user = rows[0];
 
     if (user) req.user = user;
     next();

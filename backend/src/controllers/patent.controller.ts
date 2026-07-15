@@ -1,9 +1,10 @@
 import { Response, NextFunction } from 'express';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/authenticate';
 import { logAudit } from '../lib/audit';
-import { PatentStatus, TechDomain, Prisma } from '@prisma/client';
+import { PatentStatus, TechDomain } from '../types/enums';
+import { v4 as uuidv4 } from 'uuid';
 
 // ─── GET /api/patents ─────────────────────────────────────────────
 export const getPatents = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -16,66 +17,70 @@ export const getPatents = async (req: AuthRequest, res: Response, next: NextFunc
 
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
-    const skip = (pageNum - 1) * limitNum;
+    const offset = (pageNum - 1) * limitNum;
 
-    const where: Prisma.PatentWhereInput = {
-      ...(search && {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { abstract: { contains: search, mode: 'insensitive' } },
-          { patentNumber: { contains: search, mode: 'insensitive' } },
-          { keywords: { hasSome: [search] } },
-        ],
-      }),
-      ...(status && { status: status as PatentStatus }),
-      ...(domain && { domain: domain as TechDomain }),
-      ...(isListed !== undefined && { isListed: isListed === 'true' }),
-      ...(inventorId && { inventorId }),
-      ...(organizationId && { organizationId }),
-      // Role-based visibility: non-admin users only see their own or listed patents
-      ...(req.user?.role !== 'ADMIN' && req.user?.role !== 'STARTUP' && req.user?.role !== 'ENTERPRISE' && {
-        OR: [
-          { inventorId: req.user?.id },
-          { organizationId: req.user?.organizationId || undefined },
-          { isListed: true },
-        ],
-      }),
-    };
-
-    const [patents, total] = await Promise.all([
-      prisma.patent.findMany({
-        where,
-        skip,
-        take: limitNum,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          inventor: { select: { id: true, name: true, organization: { select: { name: true } } } },
-          organization: { select: { id: true, name: true } },
-          aiReport: {
-            select: {
-              overallScore: true, noveltyScore: true, commercialScore: true,
-              marketFitScore: true, legalStrength: true, techReadiness: true,
-              potentialBuyers: true, valuationEstimate: true,
-            },
-          },
-          _count: { select: { deals: true, saved: true, documents: true } },
-        },
-      }),
-      prisma.patent.count({ where }),
-    ]);
+    let query = `
+      SELECT p.*, 
+             u.id as "inventorId", u.name as "inventorName", 
+             o.id as "orgId", o.name as "orgName",
+             (SELECT COUNT(*) FROM "DealPatent" dp WHERE dp."patentId" = p.id) as "dealsCount",
+             (SELECT COUNT(*) FROM "SavedPatent" sp WHERE sp."patentId" = p.id) as "savedCount",
+             (SELECT COUNT(*) FROM "PatentDocument" pd WHERE pd."patentId" = p.id) as "documentsCount"
+      FROM "Patent" p
+      LEFT JOIN "User" u ON p."inventorId" = u.id
+      LEFT JOIN "Organization" o ON p."organizationId" = o.id
+    `;
+    let countQuery = `SELECT COUNT(*) FROM "Patent" p`;
+    
+    let whereClauses: string[] = [];
+    let params: any[] = [];
+    
+    if (search) {
+      whereClauses.push(`(p.title ILIKE $${params.length + 1} OR p.abstract ILIKE $${params.length + 1} OR p."patentNumber" ILIKE $${params.length + 1})`);
+      params.push(`%${search}%`);
+    }
+    if (status) { whereClauses.push(`p.status = $${params.length + 1}`); params.push(status); }
+    if (domain) { whereClauses.push(`p.domain = $${params.length + 1}`); params.push(domain); }
+    if (isListed !== undefined) { whereClauses.push(`p."isListed" = $${params.length + 1}`); params.push(isListed === 'true'); }
+    if (inventorId) { whereClauses.push(`p."inventorId" = $${params.length + 1}`); params.push(inventorId); }
+    if (organizationId) { whereClauses.push(`p."organizationId" = $${params.length + 1}`); params.push(organizationId); }
+    
+    if (req.user?.role !== 'ADMIN' && req.user?.role !== 'STARTUP' && req.user?.role !== 'ENTERPRISE') {
+      let roleClauses: string[] = [];
+      if (req.user?.id) { roleClauses.push(`p."inventorId" = $${params.length + 1}`); params.push(req.user.id); }
+      if (req.user?.organizationId) { roleClauses.push(`p."organizationId" = $${params.length + 1}`); params.push(req.user.organizationId); }
+      roleClauses.push(`p."isListed" = true`);
+      whereClauses.push(`(${roleClauses.join(' OR ')})`);
+    }
+    
+    if (whereClauses.length > 0) {
+      const clause = ` WHERE ${whereClauses.join(' AND ')}`;
+      query += clause; countQuery += clause;
+    }
+    
+    const safeSortBy = ['createdAt', 'title', 'viewCount', 'askingPrice'].includes(sortBy) ? sortBy : 'createdAt';
+    const safeSortOrder = sortOrder.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    query += ` ORDER BY p."${safeSortBy}" ${safeSortOrder} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    
+    const { rows: patentRows } = await db.query(query, [...params, limitNum, offset]);
+    const { rows: countRows } = await db.query(countQuery, params);
+    const total = parseInt(countRows[0].count, 10);
+    
+    const patents = patentRows.map(p => {
+       const { inventorName, orgId, orgName, dealsCount, savedCount, documentsCount, ...rest } = p;
+       return {
+         ...rest,
+         inventor: { id: p.inventorId, name: inventorName, organization: orgName ? { name: orgName } : null },
+         organization: orgId ? { id: orgId, name: orgName } : null,
+         _count: { deals: parseInt(dealsCount), saved: parseInt(savedCount), documents: parseInt(documentsCount) }
+       };
+    });
 
     res.json({
-      success: true,
-      data: patents,
-      pagination: {
-        page: pageNum, limit: limitNum, total,
-        totalPages: Math.ceil(total / limitNum),
-        hasMore: skip + limitNum < total,
-      },
+      success: true, data: patents,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum), hasMore: offset + limitNum < total },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // ─── GET /api/patents/:id ─────────────────────────────────────────
@@ -83,38 +88,38 @@ export const getPatentById = async (req: AuthRequest, res: Response, next: NextF
   try {
     const { id } = req.params as { id: string };
 
-    const patent = await prisma.patent.findUnique({
-      where: { id },
-      include: {
-        inventor: { select: { id: true, name: true, email: true, designation: true, organization: { select: { name: true } } } },
-        organization: true,
-        aiReport: true,
-        documents: { where: { isPublic: true } },
-        _count: { select: { deals: true, saved: true } },
-      },
-    });
-
-    if (!patent) throw new AppError('Patent not found.', 404);
-
-    // Increment view count
-    await prisma.patent.update({
-      where: { id },
-      data: { viewCount: { increment: 1 } },
-    });
-
-    // Check if saved by current user
+    const { rows: patentRows } = await db.query(`
+      SELECT p.*, u.id as "inventorId", u.name as "inventorName", u.email as "inventorEmail", u.designation as "inventorDesignation",
+             o.id as "orgId", o.name as "orgName",
+             (SELECT COUNT(*) FROM "DealPatent" dp WHERE dp."patentId" = p.id) as "dealsCount",
+             (SELECT COUNT(*) FROM "SavedPatent" sp WHERE sp."patentId" = p.id) as "savedCount"
+      FROM "Patent" p
+      LEFT JOIN "User" u ON p."inventorId" = u.id
+      LEFT JOIN "Organization" o ON p."organizationId" = o.id
+      WHERE p.id = $1
+    `, [id]);
+    
+    const p = patentRows[0];
+    if (!p) throw new AppError('Patent not found.', 404);
+    
+    await db.query(`UPDATE "Patent" SET "viewCount" = "viewCount" + 1 WHERE id = $1`, [id]);
+    
     let isSaved = false;
     if (req.user) {
-      const saved = await prisma.savedPatent.findUnique({
-        where: { userId_patentId: { userId: req.user.id, patentId: id } },
-      });
-      isSaved = !!saved;
+      const { rows: savedRows } = await db.query('SELECT 1 FROM "SavedPatent" WHERE "userId" = $1 AND "patentId" = $2', [req.user.id, id]);
+      isSaved = savedRows.length > 0;
     }
+    
+    const { inventorName, inventorEmail, inventorDesignation, orgId, orgName, dealsCount, savedCount, ...rest } = p;
+    const patent = {
+      ...rest,
+      inventor: { id: p.inventorId, name: inventorName, email: inventorEmail, designation: inventorDesignation, organization: orgName ? { name: orgName } : null },
+      organization: orgId ? { id: orgId, name: orgName } : null,
+      _count: { deals: parseInt(dealsCount), saved: parseInt(savedCount) }
+    };
 
     res.json({ success: true, data: { ...patent, isSaved } });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // ─── POST /api/patents ────────────────────────────────────────────
@@ -127,62 +132,25 @@ export const createPatent = async (req: AuthRequest, res: Response, next: NextFu
       licenseType, isExclusive, coInventors,
     } = req.body;
 
-    if (!title || !abstract || !domain) {
-      throw new AppError('Title, abstract, and domain are required.', 400);
-    }
+    if (!title || !abstract || !domain) throw new AppError('Title, abstract, and domain are required.', 400);
 
-    const patent = await prisma.patent.create({
-      data: {
-        title,
-        patentNumber: patentNumber || null,
-        applicationNumber: applicationNumber || null,
-        status: (status as PatentStatus) || 'FILED',
-        type: type || 'UTILITY',
-        filingDate: filingDate ? new Date(filingDate) : null,
-        grantDate: grantDate ? new Date(grantDate) : null,
-        expiryDate: expiryDate ? new Date(expiryDate) : null,
-        country: country || 'India',
-        ipcCodes: ipcCodes || [],
-        cpcCodes: cpcCodes || [],
-        abstract,
-        description: description || null,
-        claims: claims || null,
-        domain: domain as TechDomain,
-        subDomain: subDomain || null,
-        keywords: keywords || [],
-        trl: trl ? parseInt(trl) : 1,
-        isListed: isListed || false,
-        askingPrice: askingPrice ? parseFloat(askingPrice) : null,
-        royaltyRate: royaltyRate ? parseFloat(royaltyRate) : null,
-        licenseType: licenseType || null,
-        isExclusive: isExclusive || false,
-        coInventors: coInventors || [],
-        inventorId: req.user!.id,
-        organizationId: req.user!.organizationId || undefined,
-      },
-      include: {
-        inventor: { select: { id: true, name: true } },
-        organization: { select: { id: true, name: true } },
-      },
-    });
+    const id = uuidv4();
+    const { rows } = await db.query(`
+      INSERT INTO "Patent" (id, title, "patentNumber", "applicationNumber", status, type, "filingDate", "grantDate", "expiryDate", country, "ipcCodes", "cpcCodes", abstract, description, claims, domain, "subDomain", keywords, trl, "isListed", "askingPrice", "royaltyRate", "licenseType", "isExclusive", "coInventors", "inventorId", "organizationId", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, NOW()) RETURNING *
+    `, [id, title, patentNumber || null, applicationNumber || null, status || 'FILED', type || 'UTILITY', filingDate ? new Date(filingDate) : null, grantDate ? new Date(grantDate) : null, expiryDate ? new Date(expiryDate) : null, country || 'India', ipcCodes || [], cpcCodes || [], abstract, description || null, claims || null, domain, subDomain || null, keywords || [], trl ? parseInt(trl) : 1, isListed || false, askingPrice ? parseFloat(askingPrice) : null, royaltyRate ? parseFloat(royaltyRate) : null, licenseType || null, isExclusive || false, coInventors || [], req.user!.id, req.user!.organizationId || null]);
+    
+    const patent = rows[0];
 
-    await prisma.auditLog.create({
-      data: { userId: req.user!.id, action: 'CREATE_PATENT', entity: 'Patent', entityId: patent.id },
-    });
+    await db.query(`INSERT INTO "AuditLog" (id, "userId", action, entity, "entityId", "createdAt") VALUES ($1, $2, $3, $4, $5, NOW())`, [uuidv4(), req.user!.id, 'CREATE_PATENT', 'Patent', patent.id]);
 
     await logAudit({
-      userId: req.user!.id,
-      action: 'CREATE_PATENT',
-      entity: 'Patent',
-      entityId: patent.id,
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent']
+      userId: req.user!.id, action: 'CREATE_PATENT', entity: 'Patent', entityId: patent.id,
+      ipAddress: req.ip, userAgent: req.headers['user-agent']
     });
 
     res.status(201).json({ success: true, data: patent });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // ─── PATCH /api/patents/:id ───────────────────────────────────────
@@ -190,51 +158,44 @@ export const updatePatent = async (req: AuthRequest, res: Response, next: NextFu
   try {
     const { id } = req.params as { id: string };
 
-    const existing = await prisma.patent.findUnique({ where: { id } });
+    const { rows: existingRows } = await db.query('SELECT * FROM "Patent" WHERE id = $1', [id]);
+    const existing = existingRows[0];
     if (!existing) throw new AppError('Patent not found.', 404);
 
-    // Only inventor, org members, or admin can update
-    if (existing.inventorId !== req.user!.id &&
-        existing.organizationId !== req.user!.organizationId &&
-        req.user!.role !== 'ADMIN') {
+    if (existing.inventorId !== req.user!.id && existing.organizationId !== req.user!.organizationId && req.user!.role !== 'ADMIN') {
       throw new AppError('You do not have permission to update this patent.', 403);
     }
 
-    const allowedFields = [
-      'title', 'status', 'abstract', 'description', 'claims', 'keywords',
-      'trl', 'isListed', 'askingPrice', 'royaltyRate', 'licenseType', 'isExclusive',
-      'subDomain', 'ipcCodes', 'cpcCodes', 'coInventors', 'filingDate', 'grantDate', 'expiryDate',
-    ];
-
-    const updateData: any = {};
+    const allowedFields = ['title', 'status', 'abstract', 'description', 'claims', 'keywords', 'trl', 'isListed', 'askingPrice', 'royaltyRate', 'licenseType', 'isExclusive', 'subDomain', 'ipcCodes', 'cpcCodes', 'coInventors', 'filingDate', 'grantDate', 'expiryDate'];
+    
+    let updateFields: string[] = [];
+    let values: any[] = [];
+    let queryIdx = 1;
+    
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
-        updateData[field] = req.body[field];
+        updateFields.push(`"${field}" = $${queryIdx++}`);
+        values.push(req.body[field]);
       }
     }
-
-    // Handle listing
-    if (updateData.isListed === true && !existing.isListed) {
-      updateData.listingDate = new Date();
+    
+    if (req.body.isListed === true && !existing.isListed) {
+       updateFields.push(`"listingDate" = NOW()`);
     }
 
-    const updated = await prisma.patent.update({
-      where: { id },
-      data: updateData,
-      include: {
-        inventor: { select: { id: true, name: true } },
-        aiReport: { select: { overallScore: true } },
-      },
-    });
+    if (updateFields.length === 0) return res.json({ success: true, data: existing });
 
-    await prisma.auditLog.create({
-      data: { userId: req.user!.id, action: 'UPDATE_PATENT', entity: 'Patent', entityId: id, newValue: updateData },
-    });
+    updateFields.push(`"updatedAt" = NOW()`);
+    values.push(id);
+    
+    const query = `UPDATE "Patent" SET ${updateFields.join(', ')} WHERE id = $${queryIdx} RETURNING *`;
+    const { rows: updatedRows } = await db.query(query, values);
+    const updated = updatedRows[0];
+
+    await db.query(`INSERT INTO "AuditLog" (id, "userId", action, entity, "entityId", "createdAt") VALUES ($1, $2, $3, $4, $5, NOW())`, [uuidv4(), req.user!.id, 'UPDATE_PATENT', 'Patent', id]);
 
     res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // ─── DELETE /api/patents/:id ──────────────────────────────────────
@@ -242,23 +203,19 @@ export const deletePatent = async (req: AuthRequest, res: Response, next: NextFu
   try {
     const { id } = req.params as { id: string };
 
-    const existing = await prisma.patent.findUnique({ where: { id } });
+    const { rows: existingRows } = await db.query('SELECT * FROM "Patent" WHERE id = $1', [id]);
+    const existing = existingRows[0];
     if (!existing) throw new AppError('Patent not found.', 404);
 
     if (existing.inventorId !== req.user!.id && req.user!.role !== 'ADMIN') {
       throw new AppError('You do not have permission to delete this patent.', 403);
     }
 
-    await prisma.patent.delete({ where: { id } });
-
-    await prisma.auditLog.create({
-      data: { userId: req.user!.id, action: 'DELETE_PATENT', entity: 'Patent', entityId: id },
-    });
+    await db.query('DELETE FROM "Patent" WHERE id = $1', [id]);
+    await db.query(`INSERT INTO "AuditLog" (id, "userId", action, entity, "entityId", "createdAt") VALUES ($1, $2, $3, $4, $5, NOW())`, [uuidv4(), req.user!.id, 'DELETE_PATENT', 'Patent', id]);
 
     res.json({ success: true, message: 'Patent deleted successfully.' });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // ─── POST /api/patents/:id/save ────────────────────────────────────
@@ -267,44 +224,28 @@ export const toggleSavePatent = async (req: AuthRequest, res: Response, next: Ne
     const { id } = req.params as { id: string };
     const userId = req.user!.id;
 
-    const existing = await prisma.savedPatent.findUnique({
-      where: { userId_patentId: { userId, patentId: id } },
-    });
+    const { rows: existingRows } = await db.query('SELECT 1 FROM "SavedPatent" WHERE "userId" = $1 AND "patentId" = $2', [userId, id]);
 
-    if (existing) {
-      await prisma.savedPatent.delete({ where: { userId_patentId: { userId, patentId: id } } });
-      await prisma.patent.update({ where: { id }, data: { saveCount: { decrement: 1 } } });
+    if (existingRows.length > 0) {
+      await db.query('DELETE FROM "SavedPatent" WHERE "userId" = $1 AND "patentId" = $2', [userId, id]);
+      await db.query(`UPDATE "Patent" SET "saveCount" = "saveCount" - 1 WHERE id = $1`, [id]);
       res.json({ success: true, saved: false });
     } else {
-      await prisma.savedPatent.create({ data: { userId, patentId: id } });
-      await prisma.patent.update({ where: { id }, data: { saveCount: { increment: 1 } } });
+      await db.query(`INSERT INTO "SavedPatent" ("userId", "patentId") VALUES ($1, $2)`, [userId, id]);
+      await db.query(`UPDATE "Patent" SET "saveCount" = "saveCount" + 1 WHERE id = $1`, [id]);
       res.json({ success: true, saved: true });
     }
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };
 
 // ─── GET /api/patents/saved ────────────────────────────────────────
 export const getSavedPatents = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const saved = await prisma.savedPatent.findMany({
-      where: { userId: req.user!.id },
-      include: {
-        patent: {
-          include: {
-            inventor: { select: { name: true, organization: { select: { name: true } } } },
-            aiReport: { select: { overallScore: true } },
-          },
-        },
-      },
-      orderBy: { savedAt: 'desc' },
-    });
-
-    res.json({ success: true, data: saved.map(s => s.patent) });
-  } catch (err) {
-    next(err);
-  }
+    const { rows } = await db.query(`
+      SELECT p.* FROM "Patent" p JOIN "SavedPatent" sp ON p.id = sp."patentId" WHERE sp."userId" = $1 ORDER BY sp."savedAt" DESC
+    `, [req.user!.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { next(err); }
 };
 
 // ─── GET /api/patents/:id/ai-report/download ───────────────────────
@@ -312,15 +253,10 @@ export const downloadAIReport = async (req: AuthRequest, res: Response, next: Ne
   try {
     const { id } = req.params as { id: string };
 
-    const patent = await prisma.patent.findUnique({
-      where: { id },
-      include: { aiReport: true, organization: true, inventor: true },
-    });
+    const { rows: patentRows } = await db.query(`SELECT p.*, r."overallScore", r."noveltyScore", r."commercialScore", r."marketFitScore", r."executiveSummary", r."generatedAt" FROM "Patent" p JOIN "AIReport" r ON p.id = r."patentId" WHERE p.id = $1`, [id]);
+    const patent = patentRows[0];
 
-    if (!patent || !patent.aiReport) {
-      res.status(404).json({ success: false, error: 'AI Report not found.' });
-      return;
-    }
+    if (!patent) { return res.status(404).json({ success: false, error: 'AI Report not found.' }); }
 
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ margin: 50 });
@@ -338,24 +274,22 @@ export const downloadAIReport = async (req: AuthRequest, res: Response, next: Ne
     doc.fontSize(12).fillColor('#475569');
     doc.text(`Patent Number: ${patent.patentNumber || 'N/A'}`);
     doc.text(`Domain: ${patent.domain}`);
-    doc.text(`Generated On: ${new Date(patent.aiReport.generatedAt).toLocaleDateString()}`);
+    doc.text(`Generated On: ${new Date(patent.generatedAt).toLocaleDateString()}`);
     doc.moveDown(2);
 
     doc.fontSize(16).fillColor('#1E293B').text('Scores Overview');
     doc.moveDown(0.5);
     doc.fontSize(12).fillColor('#475569');
-    doc.text(`Overall Score: ${patent.aiReport.overallScore}/100`);
-    doc.text(`Novelty: ${patent.aiReport.noveltyScore}/100`);
-    doc.text(`Commercial Value: ${patent.aiReport.commercialScore}/100`);
-    doc.text(`Market Fit: ${patent.aiReport.marketFitScore}/100`);
+    doc.text(`Overall Score: ${patent.overallScore}/100`);
+    doc.text(`Novelty: ${patent.noveltyScore}/100`);
+    doc.text(`Commercial Value: ${patent.commercialScore}/100`);
+    doc.text(`Market Fit: ${patent.marketFitScore}/100`);
     
     doc.moveDown(2);
     doc.fontSize(16).fillColor('#1E293B').text('Executive Summary');
     doc.moveDown(0.5);
-    doc.fontSize(11).fillColor('#475569').text(patent.aiReport.executiveSummary);
+    doc.fontSize(11).fillColor('#475569').text(patent.executiveSummary);
     
     doc.end();
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 };

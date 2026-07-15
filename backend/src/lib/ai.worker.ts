@@ -1,7 +1,7 @@
-import { prisma } from './prisma';
+import { db } from './db';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
-// import { ChatOpenAI } from '@langchain/openai'; // Uncomment to use OpenAI
 import { HumanMessage } from '@langchain/core/messages';
+import { v4 as uuidv4 } from 'uuid';
 
 // 1. Swap the model here with just 2 lines!
 const model = new ChatGoogleGenerativeAI({ model: "gemini-2.5-flash", temperature: 0.2 });
@@ -12,13 +12,11 @@ export const processAIAnalysisJob = async (jobId: string, patentId: string) => {
     console.log(`[AI Worker] Started processing job ${jobId} for patent ${patentId}`);
 
     // Update job status to processing
-    await prisma.aIAnalysisJob.update({
-      where: { id: jobId },
-      data: { status: 'processing', startedAt: new Date() }
-    });
+    await db.query(`UPDATE "AIAnalysisJob" SET status = 'processing', "startedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1`, [jobId]);
 
     // Fetch patent details
-    const patent = await prisma.patent.findUnique({ where: { id: patentId } });
+    const { rows: patentRows } = await db.query('SELECT * FROM "Patent" WHERE id = $1', [patentId]);
+    const patent = patentRows[0];
     if (!patent) throw new Error(`Patent ${patentId} not found`);
 
     let reportData;
@@ -93,18 +91,21 @@ export const processAIAnalysisJob = async (jobId: string, patentId: string) => {
     }
 
     // Save report to DB
-    await prisma.aIReport.create({
-      data: {
-        patentId,
-        ...reportData,
-        aiModel: process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY ? 'langchain-model' : 'langchain-mock',
-      }
-    });
+    const reportId = uuidv4();
+    await db.query(`
+      INSERT INTO "AIReport" (id, "patentId", "overallScore", "noveltyScore", "commercialScore", "marketFitScore", "legalStrength", "techReadiness", strengths, weaknesses, opportunities, threats, "targetMarket", "tamValue", "samValue", "somValue", "marketGrowthRate", "revenueProjections", competitors, "licensingStrategy", "recommendedModel", "recommendedUpfront", "recommendedRoyalty", "minimumRoyalty", risks, "topBuyers", "executiveSummary", "aiModel", "generatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, NOW())
+    `, [
+      reportId, patentId, reportData.overallScore, reportData.noveltyScore, reportData.commercialScore, reportData.marketFitScore, reportData.legalStrength, reportData.techReadiness,
+      reportData.strengths, reportData.weaknesses, reportData.opportunities, reportData.threats,
+      reportData.targetMarket, reportData.tamValue, reportData.samValue, reportData.somValue, reportData.marketGrowthRate,
+      reportData.revenueProjections, reportData.competitors, reportData.licensingStrategy, reportData.recommendedModel,
+      reportData.recommendedUpfront, reportData.recommendedRoyalty, reportData.minimumRoyalty, reportData.risks, reportData.topBuyers,
+      reportData.executiveSummary, process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY ? 'langchain-model' : 'langchain-mock'
+    ]);
 
     // Generate matches against Enterprise and Startup organizations
-    const orgs = await prisma.organization.findMany({
-      where: { type: { in: ['ENTERPRISE', 'STARTUP'] } }
-    });
+    const { rows: orgs } = await db.query(`SELECT id, type, industry FROM "Organization" WHERE type IN ('ENTERPRISE', 'STARTUP')`);
 
     if (orgs.length > 0) {
       // For each organization, generate a mock match score based on AI report
@@ -118,48 +119,37 @@ export const processAIAnalysisJob = async (jobId: string, patentId: string) => {
           patentId,
           organizationId: org.id,
           matchScore: score,
-          status: 'PENDING' as const,
+          status: 'PENDING'
         };
       });
 
       // Clear old matches for this patent
-      await prisma.matchResult.deleteMany({ where: { patentId } });
+      await db.query(`DELETE FROM "MatchResult" WHERE "patentId" = $1`, [patentId]);
 
       // Create new matches
       for (const match of matches) {
-        let request = await prisma.matchRequest.findFirst({ where: { organizationId: match.organizationId } });
-        if (!request) {
-           request = await prisma.matchRequest.create({
-             data: { organizationId: match.organizationId, notes: 'General tech scouting' }
-           });
+        let { rows: reqRows } = await db.query('SELECT id FROM "MatchRequest" WHERE "organizationId" = $1', [match.organizationId]);
+        let requestId;
+        if (reqRows.length === 0) {
+           requestId = uuidv4();
+           await db.query(`INSERT INTO "MatchRequest" (id, "organizationId", notes, "updatedAt") VALUES ($1, $2, 'General tech scouting', NOW())`, [requestId, match.organizationId]);
+        } else {
+           requestId = reqRows[0].id;
         }
-        await prisma.matchResult.create({
-          data: {
-            patentId: match.patentId,
-            matchRequestId: request.id,
-            matchScore: match.matchScore,
-            status: match.status,
-            reasons: ["Strong industry alignment", "High market fit score from AI analysis"],
-            dealProbability: 50,
-            estimatedRevenue: 0,
-          }
-        });
+        await db.query(`
+          INSERT INTO "MatchResult" (id, "patentId", "matchRequestId", "matchScore", status, reasons, "dealProbability", "estimatedRevenue", "updatedAt")
+          VALUES ($1, $2, $3, $4, $5, $6, 50, 0, NOW())
+        `, [uuidv4(), match.patentId, requestId, match.matchScore, match.status, ["Strong industry alignment", "High market fit score from AI analysis"]]);
       }
     }
 
     // Update job status to completed
-    await prisma.aIAnalysisJob.update({
-      where: { id: jobId },
-      data: { status: 'completed', completedAt: new Date() }
-    });
+    await db.query(`UPDATE "AIAnalysisJob" SET status = 'completed', "completedAt" = NOW(), "updatedAt" = NOW() WHERE id = $1`, [jobId]);
 
     console.log(`[AI Worker] Successfully completed job ${jobId}`);
 
   } catch (error) {
     console.error(`[AI Worker] Job ${jobId} failed:`, error);
-    await prisma.aIAnalysisJob.update({
-      where: { id: jobId },
-      data: { status: 'failed', error: error instanceof Error ? error.message : 'Unknown error', completedAt: new Date() }
-    });
+    await db.query(`UPDATE "AIAnalysisJob" SET status = 'failed', error = $1, "completedAt" = NOW(), "updatedAt" = NOW() WHERE id = $2`, [error instanceof Error ? error.message : 'Unknown error', jobId]);
   }
 };

@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticate } from '../middleware/authenticate';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AuthRequest } from '../middleware/authenticate';
 import { Response, NextFunction } from 'express';
 import { AppError } from '../middleware/errorHandler';
@@ -11,11 +11,9 @@ import fs from 'fs';
 
 const router = Router();
 
-// Ensure upload directory exists
 const uploadDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// Multer storage config
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
@@ -44,7 +42,7 @@ const upload = multer({
   limits: { fileSize: (Number(process.env.MAX_FILE_SIZE_MB) || 50) * 1024 * 1024 },
 });
 
-// POST /api/upload/patent/:patentId — Upload document for a patent
+// POST /api/upload/patent/:patentId
 router.post('/patent/:patentId', authenticate, upload.single('file'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.file) throw new AppError('No file uploaded.', 400);
@@ -52,29 +50,26 @@ router.post('/patent/:patentId', authenticate, upload.single('file'), async (req
     const { patentId } = req.params as { patentId: string };
     const { isPublic = 'false' } = req.body;
 
-    const patent = await prisma.patent.findUnique({ where: { id: patentId } });
+    const { rows: patentRows } = await db.query('SELECT "inventorId" FROM "Patent" WHERE id = $1', [patentId]);
+    const patent = patentRows[0];
     if (!patent) throw new AppError('Patent not found.', 404);
     if (patent.inventorId !== req.user!.id && req.user!.role !== 'ADMIN') {
       throw new AppError('Access denied.', 403);
     }
 
     const fileUrl = `/uploads/${req.file.filename}`;
-    const doc = await prisma.patentDocument.create({
-      data: {
-        patentId,
-        name: req.file.originalname,
-        type: req.file.mimetype,
-        url: fileUrl,
-        size: req.file.size,
-        isPublic: isPublic === 'true',
-      },
-    });
+    const docId = uuidv4();
+    const { rows: docRows } = await db.query(`
+      INSERT INTO "PatentDocument" (id, "patentId", name, type, url, size, "isPublic", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      RETURNING *
+    `, [docId, patentId, req.file.originalname, req.file.mimetype, fileUrl, req.file.size, isPublic === 'true']);
 
-    res.status(201).json({ success: true, data: doc });
+    res.status(201).json({ success: true, data: docRows[0] });
   } catch (err) { next(err); }
 });
 
-// POST /api/upload/avatar — Upload user avatar
+// POST /api/upload/avatar
 router.post('/avatar', authenticate, upload.single('avatar'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     if (!req.file) throw new AppError('No file uploaded.', 400);
@@ -85,10 +80,7 @@ router.post('/avatar', authenticate, upload.single('avatar'), async (req: AuthRe
     }
 
     const avatarUrl = `/uploads/${req.file.filename}`;
-    await prisma.user.update({
-      where: { id: req.user!.id },
-      data: { avatar: avatarUrl },
-    });
+    await db.query('UPDATE "User" SET avatar = $1, "updatedAt" = NOW() WHERE id = $2', [avatarUrl, req.user!.id]);
 
     res.json({ success: true, data: { avatarUrl } });
   } catch (err) { next(err); }

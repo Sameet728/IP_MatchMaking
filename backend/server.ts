@@ -1,15 +1,16 @@
 import 'dotenv/config';
-import app from './app';
-import { prisma } from './lib/prisma';
+import app from './src/app';
+import { db } from './src/lib/db';
 import { createServer } from 'http';
-import { initSocket } from './lib/socket';
+import { initSocket } from './src/lib/socket';
 
 const PORT = process.env.PORT || 4000;
 
 async function bootstrap() {
   try {
     // Test database connection
-    await prisma.$connect();
+    const client = await db.connect();
+    client.release();
     console.log('✅ Database connected');
 
     const server = createServer(app);
@@ -23,7 +24,7 @@ async function bootstrap() {
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
-    await prisma.$disconnect();
+    await db.end();
     process.exit(1);
   }
 }
@@ -31,13 +32,13 @@ async function bootstrap() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('⏳ SIGTERM received. Shutting down...');
-  await prisma.$disconnect();
+  await db.end();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('⏳ SIGINT received. Shutting down...');
-  await prisma.$disconnect();
+  await db.end();
   process.exit(0);
 });
 

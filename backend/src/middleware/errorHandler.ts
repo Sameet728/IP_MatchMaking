@@ -13,7 +13,7 @@ export class AppError extends Error {
 }
 
 export const errorHandler = (
-  err: Error | AppError,
+  err: Error | AppError | any,
   _req: Request,
   res: Response,
   _next: NextFunction
@@ -26,19 +26,12 @@ export const errorHandler = (
     });
   }
 
-  // Prisma errors
-  if (err.constructor.name === 'PrismaClientKnownRequestError') {
-    const prismaError = err as any;
-    if (prismaError.code === 'P2002') {
+  // pg errors
+  if (err.code) {
+    if (err.code === '23505') { // unique violation
       return res.status(409).json({
         success: false,
         error: 'A record with this value already exists.',
-      });
-    }
-    if (prismaError.code === 'P2025') {
-      return res.status(404).json({
-        success: false,
-        error: 'Record not found.',
       });
     }
   }

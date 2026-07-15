@@ -1,46 +1,58 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
-import { prisma } from '../lib/prisma';
+import { db } from '../lib/db';
 import { AppError } from '../middleware/errorHandler';
 import { AuthRequest } from '../middleware/authenticate';
 import { Response, NextFunction } from 'express';
-import { MessageType } from '@prisma/client';
+import { MessageType } from '../types/enums';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
-// GET /api/messages/:dealId — Get messages for a deal
 router.get('/:dealId', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { dealId } = req.params as { dealId: string };
     const { cursor, limit = '30' } = req.query as Record<string, string>;
 
-    // Verify user is a participant in this deal
-    const participant = await prisma.dealParticipant.findFirst({
-      where: { dealId, userId: req.user!.id },
-    });
-    if (!participant) throw new AppError('Access denied to this conversation.', 403);
+    const { rows: participantRows } = await db.query('SELECT 1 FROM "DealParticipant" WHERE "dealId" = $1 AND "userId" = $2', [dealId, req.user!.id]);
+    if (participantRows.length === 0) throw new AppError('Access denied to this conversation.', 403);
 
-    const messages = await prisma.message.findMany({
-      where: { dealId, ...(cursor && { createdAt: { lt: new Date(cursor) } }) },
-      take: parseInt(limit),
-      orderBy: { createdAt: 'desc' },
-      include: { sender: { select: { id: true, name: true, avatar: true, role: true } } },
+    let query = `
+      SELECT m.*, u.id as "senderId", u.name as "senderName", u.avatar as "senderAvatar", u.role as "senderRole"
+      FROM "Message" m
+      JOIN "User" u ON m."senderId" = u.id
+      WHERE m."dealId" = $1
+    `;
+    const params: any[] = [dealId];
+    
+    if (cursor) {
+      query += ` AND m."createdAt" < $2`;
+      params.push(new Date(cursor));
+    }
+    
+    query += ` ORDER BY m."createdAt" DESC LIMIT $${params.length + 1}`;
+    params.push(parseInt(limit, 10));
+
+    const { rows: messageRows } = await db.query(query, params);
+    
+    const messages = messageRows.map(m => {
+       const { senderId, senderName, senderAvatar, senderRole, ...rest } = m;
+       return { ...rest, sender: { id: senderId, name: senderName, avatar: senderAvatar, role: senderRole } };
     });
 
-    // Mark messages as read
-    const unreadIds = messages.filter(m => !m.readBy.includes(req.user!.id)).map(m => m.id);
+    const unreadIds = messages.filter(m => !m.readBy || !m.readBy.includes(req.user!.id)).map(m => m.id);
     if (unreadIds.length > 0) {
-      await prisma.message.updateMany({
-        where: { id: { in: unreadIds } },
-        data: { readBy: { push: req.user!.id } },
-      });
+      await db.query(`
+        UPDATE "Message" 
+        SET "readBy" = array_append(COALESCE("readBy", '{}'), $1), "updatedAt" = NOW()
+        WHERE id = ANY($2::text[])
+      `, [req.user!.id, unreadIds]);
     }
 
-    res.json({ success: true, data: messages.reverse(), hasMore: messages.length === parseInt(limit) });
+    res.json({ success: true, data: messages.reverse(), hasMore: messages.length === parseInt(limit, 10) });
   } catch (err) { next(err); }
 });
 
-// POST /api/messages/:dealId — Send a message
 router.post('/:dealId', authenticate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { dealId } = req.params as { dealId: string };
@@ -48,24 +60,18 @@ router.post('/:dealId', authenticate, async (req: AuthRequest, res: Response, ne
 
     if (!content && !fileUrl && !proposal) throw new AppError('Message content is required.', 400);
 
-    const participant = await prisma.dealParticipant.findFirst({ where: { dealId, userId: req.user!.id } });
-    if (!participant) throw new AppError('Access denied to this conversation.', 403);
+    const { rows: participantRows } = await db.query('SELECT 1 FROM "DealParticipant" WHERE "dealId" = $1 AND "userId" = $2', [dealId, req.user!.id]);
+    if (participantRows.length === 0) throw new AppError('Access denied to this conversation.', 403);
 
-    const message = await prisma.message.create({
-      data: {
-        dealId,
-        senderId: req.user!.id,
-        type: type as MessageType,
-        content: content || null,
-        proposal: proposal || null,
-        fileName: fileName || null,
-        fileUrl: fileUrl || null,
-        fileSize: fileSize ? parseInt(fileSize) : null,
-        fileType: fileType || null,
-        readBy: [req.user!.id],
-      },
-      include: { sender: { select: { id: true, name: true, avatar: true, role: true } } },
-    });
+    const id = uuidv4();
+    const { rows } = await db.query(`
+      INSERT INTO "Message" (id, "dealId", "senderId", type, content, proposal, "fileName", "fileUrl", "fileSize", "fileType", "readBy", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ARRAY[$3]::text[], NOW())
+      RETURNING *
+    `, [id, dealId, req.user!.id, type, content || null, proposal ? JSON.stringify(proposal) : null, fileName || null, fileUrl || null, fileSize ? parseInt(fileSize) : null, fileType || null]);
+    
+    const { rows: senderRows } = await db.query('SELECT id, name, avatar, role FROM "User" WHERE id = $1', [req.user!.id]);
+    const message = { ...rows[0], sender: senderRows[0] };
 
     res.status(201).json({ success: true, data: message });
   } catch (err) { next(err); }
