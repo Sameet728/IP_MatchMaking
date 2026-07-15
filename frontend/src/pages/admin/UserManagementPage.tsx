@@ -4,6 +4,7 @@ import { Users, Search, Filter, Shield, MoreVertical, Edit, Trash2, Mail, CheckC
 import { useFetch } from '../../hooks/useApi';
 import { cn, formatDate } from '../../lib/utils';
 import { SectionHeader } from '../../components/ui/StatCard';
+import { Pagination } from '../../components/ui/Pagination';
 
 const ROLE_COLORS: Record<string, string> = {
   ADMIN: 'bg-danger/10 text-danger border-danger/20',
@@ -15,19 +16,29 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export const UserManagementPage: React.FC = () => {
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
 
-  const { data: fetchedUsers, loading } = useFetch<any[]>('/admin/users');
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setPage(1);
+  };
+
+  const handleRoleChange = (val: string) => {
+    setRoleFilter(val);
+    setPage(1);
+  };
+
+  const backendRole = roleFilter === 'All' ? undefined : roleFilter.toUpperCase();
+  const queryParams = `/admin/users?page=${page}&limit=10${search ? `&search=${encodeURIComponent(search)}` : ''}${backendRole ? `&role=${backendRole}` : ''}`;
+
+  const { data: fetchedUsers, pagination, loading } = useFetch<any[]>(queryParams, [page, search, roleFilter]);
   const users = fetchedUsers || [];
+  const filteredUsers = users;
 
-  if (loading) return <div className="p-6 text-text-muted">Loading users...</div>;
-
-  const filteredUsers = users.filter(u => {
-    const q = search.toLowerCase();
-    return (roleFilter === 'All' || u.role === roleFilter.toUpperCase()) &&
-      (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  });
+  // Initial load check
+  if (loading && users.length === 0) return <div className="p-6 text-text-muted">Loading users...</div>;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -50,9 +61,9 @@ export const UserManagementPage: React.FC = () => {
           <div className="flex gap-2">
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users..." className="input pl-8 text-sm w-48" />
+              <input value={search} onChange={e => handleSearchChange(e.target.value)} placeholder="Search users..." className="input pl-8 text-sm w-48" />
             </div>
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="input text-sm w-36">
+            <select value={roleFilter} onChange={e => handleRoleChange(e.target.value)} className="input text-sm w-36">
               {['All', 'Admin', 'Enterprise', 'Startup', 'University', 'Inventor', 'Broker'].map(r => <option key={r}>{r}</option>)}
             </select>
           </div>
@@ -118,6 +129,16 @@ export const UserManagementPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {pagination && (
+          <Pagination
+            page={page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            limit={10}
+            onPageChange={setPage}
+            className="mt-3 rounded-b-xl border-t border-border"
+          />
+        )}
       </div>
     </div>
   );

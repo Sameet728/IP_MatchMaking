@@ -92,16 +92,18 @@ export interface Patent {
   title: string;
   abstract: string;
   country: string;
-  status: PatentStatus;
+  status: PatentStatus | string;
   filingDate: string;
   grantDate?: string;
   expiryDate?: string;
   ipcCode: string;
+  ipcCodes?: string[];
   cpcCode?: string;
   inventors: string[];
   assignee: string;
   keywords: string[];
   technologyDomain: string;
+  domain?: string;
   industry: string[];
   trl: TRLLevel;
   commercialReadiness: CommercialReadiness;
@@ -110,12 +112,16 @@ export interface Patent {
   citations: number;
   aiReport?: AIReport;
   listingPrice?: number;
+  askingPrice?: number;
+  royaltyRate?: number;
   isListed: boolean;
   isFeatured?: boolean;
   views: number;
   inquiries: number;
   createdAt: string;
   updatedAt: string;
+  inventor?: any;
+  organization?: any;
 }
 
 // ----- AI REPORT -----

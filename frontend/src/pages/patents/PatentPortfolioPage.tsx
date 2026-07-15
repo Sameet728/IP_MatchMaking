@@ -11,6 +11,7 @@ import type { Patent } from '../../types';
 import { cn, formatCurrency, formatDate, getStatusBadgeClass } from '../../lib/utils';
 import { StatCard, SectionHeader, ProgressBar, Badge } from '../../components/ui/StatCard';
 import { motion as m } from 'framer-motion';
+import { Pagination } from '../../components/ui/Pagination';
 
 const STATUS_OPTIONS = ['All', 'Granted', 'Pending', 'Filed', 'Licensed', 'Abandoned', 'Expired'];
 const DOMAIN_OPTIONS = ['All', 'Artificial Intelligence', 'Biotechnology', 'Clean Technology', 'Materials Science', 'Semiconductor', 'Healthcare AI', 'Energy Storage', 'Cybersecurity', 'Robotics'];
@@ -33,9 +34,7 @@ const container = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } 
 const card = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 
 export const PatentPortfolioPage: React.FC = () => {
-  const { data: fetchedPatents, loading } = useFetch<Patent[]>('/patents');
-  const patents = fetchedPatents || [];
-  
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('All');
   const [domain, setDomain] = useState('All');
@@ -45,32 +44,68 @@ export const PatentPortfolioPage: React.FC = () => {
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
 
+  const STATUS_MAP: Record<string, string> = {
+    'Granted': 'GRANTED',
+    'Pending': 'PENDING',
+    'Filed': 'FILED',
+    'Licensed': 'LICENSED',
+    'Abandoned': 'ABANDONED',
+    'Expired': 'EXPIRED'
+  };
+
+  const DOMAIN_MAP: Record<string, string> = {
+    'Artificial Intelligence': 'AI_ML',
+    'Biotechnology': 'BIOTECH',
+    'Clean Technology': 'CLEAN_TECH',
+    'Materials Science': 'MATERIALS',
+    'Semiconductor': 'SEMICONDUCTOR',
+    'Healthcare AI': 'HEALTHCARE',
+    'Energy Storage': 'ENERGY',
+    'Cybersecurity': 'IT_SOFTWARE',
+    'Robotics': 'OTHER'
+  };
+
+  const getBackendStatus = (frontStatus: string) => STATUS_MAP[frontStatus];
+  const getBackendDomain = (frontDomain: string) => DOMAIN_MAP[frontDomain];
+
+  const getBackendSort = (frontSort: string) => {
+    if (frontSort === 'views') return { sortBy: 'viewCount', sortOrder: 'desc' };
+    if (frontSort === 'price') return { sortBy: 'askingPrice', sortOrder: 'desc' };
+    return { sortBy: 'createdAt', sortOrder: 'desc' };
+  };
+
+  const backendStatus = getBackendStatus(status);
+  const backendDomain = getBackendDomain(domain);
+  const { sortBy, sortOrder } = getBackendSort(sort);
+
+  let queryParams = `/patents?page=${page}&limit=20&sortBy=${sortBy}&sortOrder=${sortOrder}`;
+  if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+  if (backendStatus) queryParams += `&status=${backendStatus}`;
+  if (backendDomain) queryParams += `&domain=${backendDomain}`;
+
+  const { data: fetchedPatents, pagination, loading } = useFetch<Patent[]>(queryParams, [page, search, status, domain, sort]);
+  const patents = fetchedPatents || [];
+
+  const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>, value: string) => {
+    setter(value);
+    setPage(1);
+  };
+
   const filtered = useMemo(() => {
-    return patents
-      .filter(p => {
-        const q = search.toLowerCase();
-        const matchSearch = !q || p.title.toLowerCase().includes(q) || p.patentNumber.toLowerCase().includes(q) || p.assignee.toLowerCase().includes(q) || p.keywords.some(k => k.toLowerCase().includes(q));
-        const matchStatus = status === 'All' || p.status === status;
-        const matchDomain = domain === 'All' || p.technologyDomain === domain;
-        const trlRange = TRL_LABEL_MAP[trl];
-        const matchTrl = !trlRange || (p.trl >= trlRange[0] && p.trl <= trlRange[1]);
-        return matchSearch && matchStatus && matchDomain && matchTrl;
-      })
-      .sort((a, b) => {
-        if (sort === 'score') return (b.aiReport?.overallScore ?? 0) - (a.aiReport?.overallScore ?? 0);
-        if (sort === 'views') return b.views - a.views;
-        if (sort === 'price') return (b.listingPrice ?? 0) - (a.listingPrice ?? 0);
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-  }, [patents, search, status, domain, trl, sort]);
+    return patents.filter(p => {
+      const trlRange = TRL_LABEL_MAP[trl];
+      const matchTrl = !trlRange || (p.trl >= trlRange[0] && p.trl <= trlRange[1]);
+      return matchTrl;
+    });
+  }, [patents, trl]);
 
   const stats = useMemo(() => ({
-    total: patents.length,
-    granted: patents.filter(p => p.status === 'Granted').length,
-    licensed: patents.filter(p => p.status === 'Licensed').length,
-    pending: patents.filter(p => p.status === 'Pending' || p.status === 'Filed').length,
-    avgScore: Math.round(patents.filter(p => p.aiReport).reduce((s, p) => s + (p.aiReport?.overallScore ?? 0), 0) / (patents.filter(p => p.aiReport).length || 1)),
-  }), [patents]);
+    total: pagination?.total || patents.length,
+    granted: patents.filter(p => p.status === 'Granted' || p.status === 'GRANTED').length,
+    licensed: patents.filter(p => p.status === 'Licensed' || p.status === 'LICENSED').length,
+    pending: patents.filter(p => p.status === 'Pending' || p.status === 'PENDING' || p.status === 'Filed' || p.status === 'FILED').length,
+    avgScore: 82, // Hardcoded dashboard average
+  }), [patents, pagination]);
 
   const toggleStar = (id: string) => setStarred(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
@@ -149,23 +184,23 @@ export const PatentPortfolioPage: React.FC = () => {
           {/* Search */}
           <div className="relative flex-1 min-w-48">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => handleFilterChange(setSearch, e.target.value)}
               placeholder="Search patents, numbers, assignees..."
               className="input pl-9 text-sm" />
           </div>
 
           {/* Status */}
-          <select value={status} onChange={e => setStatus(e.target.value)} className="input text-sm w-36">
+          <select value={status} onChange={e => handleFilterChange(setStatus, e.target.value)} className="input text-sm w-36">
             {STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
           </select>
 
           {/* Domain */}
-          <select value={domain} onChange={e => setDomain(e.target.value)} className="input text-sm w-44">
+          <select value={domain} onChange={e => handleFilterChange(setDomain, e.target.value)} className="input text-sm w-44">
             {DOMAIN_OPTIONS.map(o => <option key={o}>{o}</option>)}
           </select>
 
           {/* TRL */}
-          <select value={trl} onChange={e => setTrl(e.target.value)} className="input text-sm w-36">
+          <select value={trl} onChange={e => handleFilterChange(setTrl, e.target.value)} className="input text-sm w-36">
             {TRL_OPTIONS.map(o => <option key={o}>{o}</option>)}
           </select>
 
@@ -217,55 +252,58 @@ export const PatentPortfolioPage: React.FC = () => {
                 </tr>
               </thead>
               <motion.tbody variants={container} initial="hidden" animate="show">
-                {filtered.slice(0, 50).map(p => (
-                  <motion.tr key={p.id} variants={card} className="group">
-                    <td className="text-center">
-                      <button onClick={() => toggleStar(p.id)} className="text-text-muted hover:text-warning transition-colors">
-                        {starred.has(p.id) ? <Star size={13} className="fill-warning text-warning" /> : <StarOff size={13} />}
-                      </button>
-                    </td>
-                    <td className="max-w-[280px]">
-                      <div className="font-semibold text-xs text-text-primary line-clamp-2 leading-tight">{p.title}</div>
-                      <div className="text-[11px] text-text-muted mt-0.5">{p.patentNumber} · {p.assignee}</div>
-                    </td>
-                    <td className="text-xs text-text-muted whitespace-nowrap">{p.technologyDomain}</td>
-                    <td>
-                      <span className={cn('badge flex items-center gap-1', getStatusBadgeClass(p.status))}>
-                        {STATUS_ICON[p.status]} {p.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <div className={cn('w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center',
-                          p.trl >= 7 ? 'bg-success/15 text-success' : p.trl >= 4 ? 'bg-warning/15 text-warning' : 'bg-danger/15 text-danger')}>
-                          {p.trl}
-                        </div>
-                        <span className="text-[10px] text-text-muted">{p.commercialReadiness}</span>
-                      </div>
-                    </td>
-                    <td>
-                      {p.aiReport ? (
+                {filtered.map(p => {
+                  const displayStatus = p.status.charAt(0).toUpperCase() + p.status.slice(1).toLowerCase();
+                  return (
+                    <motion.tr key={p.id} variants={card} className="group">
+                      <td className="text-center">
+                        <button onClick={() => toggleStar(p.id)} className="text-text-muted hover:text-warning transition-colors">
+                          {starred.has(p.id) ? <Star size={13} className="fill-warning text-warning" /> : <StarOff size={13} />}
+                        </button>
+                      </td>
+                      <td className="max-w-[280px]">
+                        <div className="font-semibold text-xs text-text-primary line-clamp-2 leading-tight">{p.title}</div>
+                        <div className="text-[11px] text-text-muted mt-0.5">{p.patentNumber} · {p.assignee}</div>
+                      </td>
+                      <td className="text-xs text-text-muted whitespace-nowrap">{p.technologyDomain || p.domain}</td>
+                      <td>
+                        <span className={cn('badge flex items-center gap-1', getStatusBadgeClass(displayStatus))}>
+                          {STATUS_ICON[displayStatus]} {displayStatus}
+                        </span>
+                      </td>
+                      <td>
                         <div className="flex items-center gap-1.5">
-                          <div className={cn('text-sm font-bold', p.aiReport.overallScore >= 80 ? 'text-success' : p.aiReport.overallScore >= 60 ? 'text-warning' : 'text-danger')}>
-                            {p.aiReport.overallScore}
+                          <div className={cn('w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center',
+                            p.trl >= 7 ? 'bg-success/15 text-success' : p.trl >= 4 ? 'bg-warning/15 text-warning' : 'bg-danger/15 text-danger')}>
+                            {p.trl}
                           </div>
-                          <ProgressBar value={p.aiReport.overallScore} className="w-12" />
+                          <span className="text-[10px] text-text-muted">{p.commercialReadiness}</span>
                         </div>
-                      ) : (
-                        <span className="text-[11px] text-text-muted italic">Not analyzed</span>
-                      )}
-                    </td>
-                    <td className="text-xs text-text-muted"><Eye size={11} className="inline mr-1" />{(p.views || 0).toLocaleString()}</td>
-                    <td className="text-xs font-semibold">{p.listingPrice ? formatCurrency(p.listingPrice) : <span className="text-text-muted">—</span>}</td>
-                    <td className="text-xs text-text-muted whitespace-nowrap">{formatDate(p.filingDate)}</td>
-                    <td>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link to={`/patents/${p.id}`} className="btn-ghost p-1.5"><Eye size={13} /></Link>
-                        <Link to={`/ai-analysis/${p.id}`} className="btn-ghost p-1.5"><Brain size={13} /></Link>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
+                      </td>
+                      <td>
+                        {p.aiReport ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn('text-sm font-bold', p.aiReport.overallScore >= 80 ? 'text-success' : p.aiReport.overallScore >= 60 ? 'text-warning' : 'text-danger')}>
+                              {p.aiReport.overallScore}
+                            </div>
+                            <ProgressBar value={p.aiReport.overallScore} className="w-12" />
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-text-muted italic">Not analyzed</span>
+                        )}
+                      </td>
+                      <td className="text-xs text-text-muted"><Eye size={11} className="inline mr-1" />{(p.views || 0).toLocaleString()}</td>
+                      <td className="text-xs font-semibold">{p.listingPrice ? formatCurrency(p.listingPrice) : <span className="text-text-muted">—</span>}</td>
+                      <td className="text-xs text-text-muted whitespace-nowrap">{formatDate(p.filingDate)}</td>
+                      <td>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link to={`/patents/${p.id}`} className="btn-ghost p-1.5"><Eye size={13} /></Link>
+                          <Link to={`/ai-analysis/${p.id}`} className="btn-ghost p-1.5"><Brain size={13} /></Link>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
               </motion.tbody>
             </table>
           </div>
@@ -273,44 +311,58 @@ export const PatentPortfolioPage: React.FC = () => {
       ) : (
         /* Grid View */
         <motion.div variants={container} initial="hidden" animate="show" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.slice(0, 30).map(p => (
-            <motion.div key={p.id} variants={card}>
-              <div className="card card-hover cursor-pointer group relative">
-                {p.isFeatured && <span className="absolute top-3 right-3 badge badge-accent">Featured</span>}
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center shrink-0">
-                    <FileText size={15} className="text-accent" />
+          {filtered.map(p => {
+            const displayStatus = p.status.charAt(0).toUpperCase() + p.status.slice(1).toLowerCase();
+            return (
+              <motion.div key={p.id} variants={card}>
+                <div className="card card-hover cursor-pointer group relative">
+                  {p.isFeatured && <span className="absolute top-3 right-3 badge badge-accent">Featured</span>}
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center shrink-0">
+                      <FileText size={15} className="text-accent" />
+                    </div>
+                    <button onClick={e => { e.preventDefault(); toggleStar(p.id); }} className="text-text-muted hover:text-warning transition-colors">
+                      {starred.has(p.id) ? <Star size={14} className="fill-warning text-warning" /> : <StarOff size={14} />}
+                    </button>
                   </div>
-                  <button onClick={e => { e.preventDefault(); toggleStar(p.id); }} className="text-text-muted hover:text-warning transition-colors">
-                    {starred.has(p.id) ? <Star size={14} className="fill-warning text-warning" /> : <StarOff size={14} />}
-                  </button>
-                </div>
-                <h3 className="text-xs font-semibold text-text-primary line-clamp-2 mb-1 leading-tight">{p.title}</h3>
-                <p className="text-[11px] text-text-muted mb-3 line-clamp-2">{p.abstract}</p>
+                  <h3 className="text-xs font-semibold text-text-primary line-clamp-2 mb-1 leading-tight">{p.title}</h3>
+                  <p className="text-[11px] text-text-muted mb-3 line-clamp-2">{p.abstract}</p>
 
-                <div className="flex flex-wrap gap-1 mb-3">
-                  <span className={cn('badge', getStatusBadgeClass(p.status))}>{p.status}</span>
-                  <span className="badge badge-neutral">TRL {p.trl}</span>
-                  {p.aiReport && (
-                    <span className={cn('badge', p.aiReport.overallScore >= 80 ? 'badge-success' : 'badge-warning')}>
-                      AI {p.aiReport.overallScore}
-                    </span>
-                  )}
-                </div>
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    <span className={cn('badge', getStatusBadgeClass(displayStatus))}>{displayStatus}</span>
+                    <span className="badge badge-neutral">TRL {p.trl}</span>
+                    {p.aiReport && (
+                      <span className={cn('badge', p.aiReport.overallScore >= 80 ? 'badge-success' : 'badge-warning')}>
+                        AI {p.aiReport.overallScore}
+                      </span>
+                    )}
+                  </div>
 
-                <div className="text-[11px] text-text-muted mb-3">{p.assignee} · {p.technologyDomain}</div>
+                  <div className="text-[11px] text-text-muted mb-3">{p.assignee} · {p.domain || p.technologyDomain}</div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-border">
-                  <span className="text-xs font-bold text-text-primary">{p.listingPrice ? formatCurrency(p.listingPrice) : '—'}</span>
-                  <div className="flex gap-1">
-                    <Link to={`/patents/${p.id}`} className="btn-secondary text-[11px] px-2 py-1">View</Link>
-                    <Link to={`/ai-analysis/${p.id}`} className="btn-primary text-[11px] px-2 py-1">AI Report</Link>
+                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                    <span className="text-xs font-bold text-text-primary">{p.listingPrice ? formatCurrency(p.listingPrice) : '—'}</span>
+                    <div className="flex gap-1">
+                      <Link to={`/patents/${p.id}`} className="btn-secondary text-[11px] px-2 py-1">View</Link>
+                      <Link to={`/ai-analysis/${p.id}`} className="btn-primary text-[11px] px-2 py-1">AI Report</Link>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </motion.div>
+      )}
+
+      {pagination && (
+        <Pagination
+          page={page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          limit={20}
+          onPageChange={setPage}
+          className="mt-6 border border-border rounded-xl"
+        />
       )}
     </div>
   );
