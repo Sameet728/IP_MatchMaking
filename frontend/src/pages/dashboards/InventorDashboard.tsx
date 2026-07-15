@@ -48,7 +48,7 @@ export const InventorDashboard: React.FC = () => {
       {/* Page header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <h1 className="page-title">Inventor Dashboard</h1>
-        <p className="text-text-muted text-sm mt-1">Welcome back, {user?.name} · {user?.organization?.name || 'Independent'}</p>
+        <p className="text-text-muted text-sm mt-1">Welcome back, {user?.name} · {user?.organization || 'Independent Researcher'}</p>
       </motion.div>
 
       {/* KPI row */}

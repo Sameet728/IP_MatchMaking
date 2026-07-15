@@ -186,7 +186,7 @@ export const ReportsPage: React.FC = () => {
             <div className="card text-center py-16">
               <FileText size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm font-medium text-text-muted">No reports found matching your filters</p>
-              <button onClick={() => { setSearch(''); setSelectedType(null); setStarFilter(false); }} className="btn-ghost text-xs mt-2">Clear filters</button>
+              <button onClick={() => { setSearch(''); setFilterType('All'); }} className="btn-ghost text-xs mt-2">Clear filters</button>
             </div>
           )}
         </div>

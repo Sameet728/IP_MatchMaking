@@ -7,7 +7,7 @@ import { formatCurrency, getStatusBadgeClass } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useFetch } from '../../hooks/useApi';
-import { UNIVERSITY_DEPARTMENTS, DOMAIN_BREAKDOWN, LICENSING_FUNNEL } from '../../data/mockData';
+import { UNIVERSITY_DEPARTMENTS, DOMAIN_BREAKDOWN, LICENSING_FUNNEL, REVENUE_TREND } from '../../data/mockData';
 
 const DEPT_COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#EC4899', '#14B8A6'];
 
