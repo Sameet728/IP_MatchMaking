@@ -10,6 +10,7 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 // Phase 2 — Patent System
 import { PatentPortfolioPage } from './pages/patents/PatentPortfolioPage';
 import { PatentUploadPage } from './pages/patents/PatentUploadPage';
+import { PatentBulkUploadPage } from './pages/patents/PatentBulkUploadPage';
 import { PatentDetailPage } from './pages/patents/PatentDetailPage';
 
 // Phase 3 — AI Intelligence Engine
@@ -70,10 +71,12 @@ function App() {
           <Route element={<AppShell />}>
             <Route path="/dashboard" element={<DashboardRouter />} />
 
-            {/* Phase 2 — Patent System */}
+            {/* Patents */}
             <Route path="/patents" element={<PatentPortfolioPage />} />
             <Route path="/patents/upload" element={<PatentUploadPage />} />
+            <Route path="/patents/bulk-upload" element={<PatentBulkUploadPage />} />
             <Route path="/patents/:id" element={<PatentDetailPage />} />
+            <Route path="/patents/saved" element={<SavedPatentsPage />} />
 
             {/* Phase 3 — AI Intelligence Engine */}
             <Route path="/ai-analysis" element={<AIAnalysisDashboard />} />

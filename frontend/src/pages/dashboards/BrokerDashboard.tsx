@@ -26,8 +26,10 @@ const NEGOTIATION_STAGES = [
 export const BrokerDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const profile = user?.profile as { dealsCompleted: number; totalCommissions: number; activeDeals: number; specializations: string[] } | undefined;
-  const { data: fetchedDeals } = useFetch<any[]>('/deals');
+  const { data: fetchedDeals, loading } = useFetch<any[]>('/deals');
   const deals = fetchedDeals || [];
+
+  if (loading) return <div className="p-6 text-text-muted">Loading broker dashboard...</div>;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -35,7 +37,7 @@ export const BrokerDashboard: React.FC = () => {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="page-title">Broker Dashboard</h1>
-            <p className="text-text-muted text-sm mt-1">{user?.name} · {user?.organization?.name || 'Independent'} · {profile?.specializations?.join(', ')}</p>
+            <p className="text-text-muted text-sm mt-1">{user?.name} · {user?.organization || 'Independent'} · {profile?.specializations?.join(', ')}</p>
           </div>
           <div className="flex gap-2">
             <Link to="/deals" className="btn-primary text-xs">View Active Deals</Link>

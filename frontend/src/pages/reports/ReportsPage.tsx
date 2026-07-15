@@ -37,7 +37,8 @@ export const ReportsPage: React.FC = () => {
 
   const filteredReports = reports.filter(r => {
     const q = search.toLowerCase();
-    return (!q || r.title.toLowerCase().includes(q)) && 
+    const name = r.name || r.title || '';
+    return (!q || name.toLowerCase().includes(q)) && 
            (filterType === 'All' || r.type === filterType);
   });
 
@@ -181,11 +182,11 @@ export const ReportsPage: React.FC = () => {
             ))}
           </div>
 
-          {filtered.length === 0 && (
+          {filteredReports.length === 0 && (
             <div className="card text-center py-16">
               <FileText size={32} className="text-text-muted mx-auto mb-3" />
               <p className="text-sm font-medium text-text-muted">No reports found matching your filters</p>
-              <button onClick={() => { setSearch(''); setSelectedType(null); setStarFilter(false); }} className="btn-ghost text-xs mt-2">Clear filters</button>
+              <button onClick={() => { setSearch(''); setFilterType('All'); }} className="btn-ghost text-xs mt-2">Clear filters</button>
             </div>
           )}
         </div>

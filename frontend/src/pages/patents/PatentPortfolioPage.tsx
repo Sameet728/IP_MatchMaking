@@ -159,6 +159,7 @@ export const PatentPortfolioPage: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <button onClick={exportCSV} disabled={filtered.length === 0} className="btn-secondary text-xs gap-1 disabled:opacity-40"><Download size={13} /> Export CSV ({filtered.length})</button>
+          <Link to="/patents/bulk-upload" className="btn-secondary text-xs gap-1"><Upload size={13} /> Bulk Import CSV</Link>
           <Link to="/patents/upload" className="btn-primary text-xs"><Plus size={13} /> Add Patent</Link>
         </div>
       </motion.div>

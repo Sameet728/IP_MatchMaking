@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../../lib/api';
 import { Loader2, RefreshCw } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 
 export const OTPPage: React.FC = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);

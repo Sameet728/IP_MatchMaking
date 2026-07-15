@@ -85,7 +85,7 @@ export const DealDetailsPage: React.FC = () => {
           <div className="card">
             <SectionHeader title="Execution Milestones" />
             <div className="space-y-3 mt-4">
-              {deal.milestones.map((m, i) => (
+              {deal.milestones.map((m: any, i: number) => (
                 <div key={i} className={cn('flex items-center gap-4 p-4 rounded-xl border transition-colors', m.status === 'Met' ? 'bg-success/5 border-success/20' : 'bg-navy-50 border-border')}>
                   <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0',
                     m.status === 'Met' ? 'bg-success text-white' : 'bg-navy-200 text-text-muted')}>

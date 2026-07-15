@@ -134,24 +134,24 @@ export const PatentDetailPage: React.FC = () => {
                   <div>
                     <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Keywords</h3>
                     <div className="flex flex-wrap gap-1.5">
-                      {patent.keywords.map(k => <span key={k} className="badge badge-neutral">{k}</span>)}
+                      {patent.keywords.map((k: any) => <span key={k} className="badge badge-neutral">{k}</span>)}
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Target Industries</h3>
                     <div className="flex flex-wrap gap-1.5">
-                      {patent.industry.map(i => <span key={i} className="badge badge-accent">{i}</span>)}
+                      {patent.industry.map((i: any) => <span key={i} className="badge badge-accent">{i}</span>)}
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Inventors</h3>
                     <div className="flex flex-wrap gap-2">
-                      {patent.inventors.map(inv => (
+                      {patent.inventors.map((inv: any) => (
                         <div key={inv} className="flex items-center gap-1.5 px-2.5 py-1 bg-navy-50 rounded-full border border-border">
                           <div className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center text-[9px] font-bold text-accent">
-                            {inv.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            {inv.split(' ').map((n: any) => n[0]).join('').slice(0, 2)}
                           </div>
                           <span className="text-xs text-text-primary">{inv}</span>
                         </div>
@@ -235,7 +235,7 @@ export const PatentDetailPage: React.FC = () => {
                       <div>
                         <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Monetization Options</h3>
                         <div className="flex flex-wrap gap-2">
-                          {patent.aiReport.monetizationOptions.map(opt => (
+                          {patent.aiReport.monetizationOptions.map((opt: any) => (
                             <span key={opt} className="badge badge-accent">{opt}</span>
                           ))}
                         </div>
@@ -244,7 +244,7 @@ export const PatentDetailPage: React.FC = () => {
                       <div>
                         <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Government Schemes</h3>
                         <div className="space-y-2">
-                          {patent.aiReport.governmentSchemes.map(scheme => (
+                          {patent.aiReport.governmentSchemes.map((scheme: any) => (
                             <div key={scheme} className="flex items-center gap-2 text-xs text-text-primary">
                               <CheckCircle size={12} className="text-success shrink-0" /> {scheme}
                             </div>
@@ -310,7 +310,7 @@ export const PatentDetailPage: React.FC = () => {
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="card">
                 <SectionHeader title="Top Potential Buyers" />
                 <div className="space-y-3">
-                  {patent.aiReport.potentialBuyers.map((buyer, i) => (
+                  {patent.aiReport.potentialBuyers.map((buyer: any, i: number) => (
                     <div key={i} className="p-3 bg-navy-50 rounded-lg border border-border">
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-xs font-semibold text-text-primary">{buyer.company}</span>
@@ -327,7 +327,7 @@ export const PatentDetailPage: React.FC = () => {
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }} className="card">
                 <SectionHeader title="SDG Mapping" />
                 <div className="space-y-1.5">
-                  {patent.aiReport.sdgMapping.map(sdg => (
+                  {patent.aiReport.sdgMapping.map((sdg: any) => (
                     <div key={sdg} className="flex items-center gap-2 text-xs text-text-primary">
                       <div className="w-2 h-2 rounded-full bg-success shrink-0" /> {sdg}
                     </div>

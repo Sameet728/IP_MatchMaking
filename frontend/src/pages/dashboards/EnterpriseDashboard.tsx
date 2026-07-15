@@ -7,6 +7,7 @@ import { formatCurrency, getStatusBadgeClass, cn } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useFetch } from '../../hooks/useApi';
+import { DOMAIN_BREAKDOWN } from '../../data/mockData';
 
 const ACQUISITION_PIPELINE = [
   { stage: 'Scouted', count: 47, value: 120000000 },
@@ -24,8 +25,10 @@ const ROI_DATA = [
 export const EnterpriseDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const profile = user?.profile as { company: string; industry: string; ipBudget: number; acquisitions: number } | undefined;
-  const { data: fetchedPatents } = useFetch<any[]>('/patents?isListed=true&limit=3');
+  const { data: fetchedPatents, loading } = useFetch<any[]>('/patents?isListed=true&limit=3');
   const featuredPatents = fetchedPatents || [];
+
+  if (loading) return <div className="p-6 text-text-muted flex items-center gap-2">Loading Enterprise Dashboard...</div>;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

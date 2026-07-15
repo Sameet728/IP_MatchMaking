@@ -37,6 +37,9 @@ export const UserManagementPage: React.FC = () => {
   const users = fetchedUsers || [];
   const filteredUsers = users;
 
+  // Initial load check
+  if (loading && users.length === 0) return <div className="p-6 text-text-muted">Loading users...</div>;
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between mb-6 flex-wrap gap-3">
