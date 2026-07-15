@@ -1,16 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Shield, AlertCircle, Clock } from 'lucide-react';
 import { SectionHeader } from '../../components/ui/StatCard';
-
-const MOCK_LOGS = [
-  { id: 'L-8821', action: 'User Login', user: 'admin@platform.com', ip: '192.168.1.1', time: '2 mins ago', level: 'Info' },
-  { id: 'L-8820', action: 'API Key Generated', user: 'system_auth', ip: 'Internal', time: '15 mins ago', level: 'Warning' },
-  { id: 'L-8819', action: 'Patent Deleted', user: 'john.d@enterprise.com', ip: '203.0.113.42', time: '1 hour ago', level: 'Critical' },
-  { id: 'L-8818', action: 'Deal Status Changed', user: 'broker_mike@ip.com', ip: '198.51.100.12', time: '3 hours ago', level: 'Info' },
-];
+import { useFetch } from '../../hooks/useApi';
+import { Pagination } from '../../components/ui/Pagination';
 
 export const LogsPage: React.FC = () => {
+  const [page, setPage] = useState(1);
+  const { data: fetchedLogs, pagination, loading } = useFetch<any[]>(`/admin/audit-logs?page=${page}&limit=20`, [page]);
+  const logs = fetchedLogs || [];
+
+  const getLogLevel = (action: string) => {
+    if (action.includes('DELETE') || action.includes('ERROR') || action.includes('FAILED')) return 'Critical';
+    if (action.includes('UPDATE') || action.includes('CREATE') || action.includes('GENERATE') || action.includes('ADMIN')) return 'Warning';
+    return 'Info';
+  };
+
+  const formatLogTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-start justify-between mb-6 flex-wrap gap-3">
@@ -25,26 +36,51 @@ export const LogsPage: React.FC = () => {
         </div>
       </motion.div>
 
-      <div className="card bg-navy-900 border-navy-700 text-white">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield size={16} className="text-accent" />
-          <h2 className="text-sm font-bold">Live Security Feed</h2>
+      <div className="card bg-navy-900 border-navy-700 text-white p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Shield size={16} className="text-accent" />
+            <h2 className="text-sm font-bold">Live Security Feed</h2>
+          </div>
+          {loading && <span className="text-xs text-text-muted">Loading logs...</span>}
         </div>
         
-        <div className="space-y-1 font-mono text-[11px]">
-          {MOCK_LOGS.map(log => (
-            <div key={log.id} className="flex items-start gap-4 p-2 hover:bg-navy-800 rounded">
-              <div className="text-navy-400 shrink-0 w-24">{log.time}</div>
-              <div className={`shrink-0 w-20 font-bold ${log.level === 'Info' ? 'text-blue-400' : log.level === 'Warning' ? 'text-yellow-400' : 'text-red-400'}`}>
-                [{log.level}]
+        <div className="space-y-1.5 font-mono text-[11px] min-h-[300px]">
+          {logs.map(log => {
+            const level = getLogLevel(log.action);
+            return (
+              <div key={log.id} className="flex items-start gap-4 p-2 hover:bg-navy-800 rounded transition-colors border-b border-navy-800/40">
+                <div className="text-navy-400 shrink-0 w-36">{formatLogTime(log.createdAt)}</div>
+                <div className={`shrink-0 w-20 font-bold ${level === 'Info' ? 'text-blue-400' : level === 'Warning' ? 'text-yellow-400' : 'text-red-400'}`}>
+                  [{level}]
+                </div>
+                <div className="text-navy-200 shrink-0 w-44 truncate" title={log.user?.email || 'System'}>
+                  {log.user?.name || 'System'}
+                </div>
+                <div className="text-white flex-1 truncate" title={log.action}>
+                  {log.action} {log.entity && `(${log.entity}:${log.entityId})`}
+                </div>
+                <div className="text-navy-500 shrink-0">{log.ipAddress || 'Internal'}</div>
               </div>
-              <div className="text-navy-200 shrink-0 w-48">{log.user}</div>
-              <div className="text-white flex-1">{log.action}</div>
-              <div className="text-navy-500 shrink-0">{log.ip}</div>
-            </div>
-          ))}
+            );
+          })}
+          {!loading && logs.length === 0 && (
+            <div className="text-center text-text-muted py-8">No logs found.</div>
+          )}
         </div>
+
+        {pagination && (
+          <Pagination
+            page={page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            limit={20}
+            onPageChange={setPage}
+            className="mt-6 border-t border-navy-800 bg-navy-900 rounded-b-xl text-white py-4 px-0"
+          />
+        )}
       </div>
     </div>
   );
 };
+

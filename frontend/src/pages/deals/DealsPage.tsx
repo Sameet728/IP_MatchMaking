@@ -9,6 +9,7 @@ import { useFetch } from '../../hooks/useApi';
 import type { Deal } from '../../types';
 import { cn, formatCurrency, formatDate } from '../../lib/utils';
 import { StatCard, SectionHeader, ProgressBar } from '../../components/ui/StatCard';
+import { Pagination } from '../../components/ui/Pagination';
 
 const STATUS_STEPS: Record<string, string[]> = {
   'NDA Signed': ['NDA Signed'],
@@ -28,12 +29,45 @@ const COLOR_MAP: Record<string, string> = {
 };
 
 export const DealsPage: React.FC = () => {
-  const { data: fetchedDeals, loading } = useFetch<Deal[]>('/deals');
-  const deals = fetchedDeals || [];
-  
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+
+  const getBackendStatus = (frontStatus: string) => {
+    if (frontStatus === 'All') return undefined;
+    if (frontStatus === 'NDA Signed') return 'NDA_SIGNED';
+    if (frontStatus === 'Term Sheet') return 'TERM_SHEET';
+    if (frontStatus === 'Due Diligence') return 'DUE_DILIGENCE';
+    if (frontStatus === 'Negotiating') return 'NEGOTIATING';
+    if (frontStatus === 'Active') return 'ACTIVE';
+    if (frontStatus === 'Signed') return 'SIGNED';
+    if (frontStatus === 'Completed') return 'COMPLETED';
+    return frontStatus.toUpperCase().replace(' ', '_');
+  };
+
+  const formatStatus = (status: string) => {
+    const map: Record<string, string> = {
+      'NDA_SIGNED': 'NDA Signed',
+      'TERM_SHEET': 'Term Sheet',
+      'DUE_DILIGENCE': 'Due Diligence',
+      'NEGOTIATING': 'Negotiating',
+      'ACTIVE': 'Active',
+      'SIGNED': 'Signed',
+      'COMPLETED': 'Completed',
+      'INQUIRY': 'Inquiry',
+      'NDA_SENT': 'NDA Sent',
+      'AGREEMENT_DRAFT': 'Agreement Draft',
+      'TERMINATED': 'Terminated'
+    };
+    return map[status] || status;
+  };
+
+  const backendStatus = getBackendStatus(statusFilter);
+  const queryParams = `/deals?page=${page}&limit=10${backendStatus ? `&status=${backendStatus}` : ''}`;
+
+  const { data: fetchedDeals, pagination, loading } = useFetch<Deal[]>(queryParams, [page, statusFilter]);
+  const deals = fetchedDeals || [];
 
   React.useEffect(() => {
     if (deals.length > 0 && !selectedDeal) {
@@ -41,16 +75,24 @@ export const DealsPage: React.FC = () => {
     }
   }, [deals, selectedDeal]);
 
+  const handleStatusChange = (newStatus: string) => {
+    setStatusFilter(newStatus);
+    setPage(1);
+    setSelectedDeal(null);
+  };
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return deals.filter(d => {
-      return (statusFilter === 'All' || d.status === statusFilter) &&
-        (!q || (d.patents?.[0]?.patent?.title || '').toLowerCase().includes(q) || (d.company?.name || '').toLowerCase().includes(q));
+      return !q || (d.patents?.[0]?.patent?.title || '').toLowerCase().includes(q) || (d.company?.name || '').toLowerCase().includes(q);
     });
-  }, [deals, search, statusFilter]);
+  }, [deals, search]);
 
   const totalValue = deals.reduce((s, d) => s + (d.upfrontFee || 0), 0);
-  const activeCount = deals.filter(d => d.status === 'Active' || d.status === 'Negotiating').length;
+  const activeCount = deals.filter(d => {
+    const formatted = formatStatus(d.status);
+    return formatted === 'Active' || formatted === 'Negotiating';
+  }).length;
 
   if (loading) return <div className="p-6">Loading deals...</div>;
 
@@ -87,33 +129,46 @@ export const DealsPage: React.FC = () => {
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search deals..." className="input pl-8 text-sm" />
             </div>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input text-sm w-36">
+            <select value={statusFilter} onChange={e => handleStatusChange(e.target.value)} className="input text-sm w-36">
               {['All', ...ALL_STEPS].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
 
           {/* Deal cards */}
           <div className="space-y-2">
-            {filtered.map(deal => (
-              <motion.button key={deal.id} onClick={() => setSelectedDeal(deal)} layout
-                className={cn('w-full text-left p-4 rounded-xl border transition-all',
-                  selectedDeal?.id === deal.id ? 'border-accent bg-accent/5 shadow-sm' : 'border-border bg-white hover:bg-navy-50')}>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="text-xs font-semibold text-text-primary line-clamp-2 flex-1">{deal.patents?.[0]?.patent?.title || 'Patent Deal'}</div>
-                  <span className={cn('badge shrink-0', COLOR_MAP[deal.status] || 'badge-neutral')}>{deal.status}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[11px] text-text-muted">
-                  <span className="flex items-center gap-1"><Building2 size={10} />{deal.company?.name}</span>
-                  <span>{deal.type}</span>
-                  <span className="ml-auto font-semibold text-text-primary">{formatCurrency(deal.upfrontFee)}</span>
-                </div>
-                <div className="mt-2.5">
-                  <ProgressBar value={STATUS_STEPS[deal.status]?.length ?? 0} max={ALL_STEPS.length}
-                    color={deal.status === 'Active' || deal.status === 'Signed' ? '#10B981' : deal.status === 'Negotiating' ? '#F59E0B' : '#2563EB'} />
-                </div>
-              </motion.button>
-            ))}
+            {filtered.map(deal => {
+              const displayStatus = formatStatus(deal.status);
+              return (
+                <motion.button key={deal.id} onClick={() => setSelectedDeal(deal)} layout
+                  className={cn('w-full text-left p-4 rounded-xl border transition-all',
+                    selectedDeal?.id === deal.id ? 'border-accent bg-accent/5 shadow-sm' : 'border-border bg-white hover:bg-navy-50')}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="text-xs font-semibold text-text-primary line-clamp-2 flex-1">{deal.patents?.[0]?.patent?.title || 'Patent Deal'}</div>
+                    <span className={cn('badge shrink-0', COLOR_MAP[displayStatus] || 'badge-neutral')}>{displayStatus}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-text-muted">
+                    <span className="flex items-center gap-1"><Building2 size={10} />{deal.company?.name}</span>
+                    <span>{deal.type}</span>
+                    <span className="ml-auto font-semibold text-text-primary">{formatCurrency(deal.upfrontFee)}</span>
+                  </div>
+                  <div className="mt-2.5">
+                    <ProgressBar value={STATUS_STEPS[displayStatus]?.length ?? 0} max={ALL_STEPS.length}
+                      color={displayStatus === 'Active' || displayStatus === 'Signed' ? '#10B981' : displayStatus === 'Negotiating' ? '#F59E0B' : '#2563EB'} />
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
+          {pagination && (
+            <Pagination
+              page={page}
+              totalPages={pagination.totalPages}
+              total={pagination.total}
+              limit={10}
+              onPageChange={setPage}
+              className="mt-3 rounded-xl border border-border"
+            />
+          )}
         </div>
 
         {/* Deal detail */}
@@ -130,15 +185,16 @@ export const DealsPage: React.FC = () => {
                       <span className="flex items-center gap-1"><Calendar size={11} />Started {selectedDeal.createdAt ? formatDate(selectedDeal.createdAt) : 'N/A'}</span>
                     </div>
                   </div>
-                  <span className={cn('badge', COLOR_MAP[selectedDeal.status] || 'badge-neutral')}>{selectedDeal.status}</span>
+                  <span className={cn('badge', COLOR_MAP[formatStatus(selectedDeal.status)] || 'badge-neutral')}>{formatStatus(selectedDeal.status)}</span>
                 </div>
 
                 {/* Progress pipeline */}
                 <div className="relative">
                   <div className="flex items-center">
                     {ALL_STEPS.map((step, i) => {
-                      const done = (STATUS_STEPS[selectedDeal.status]?.length ?? 0) > i;
-                      const active = STATUS_STEPS[selectedDeal.status]?.[STATUS_STEPS[selectedDeal.status].length - 1] === step;
+                      const displayStatus = formatStatus(selectedDeal.status);
+                      const done = (STATUS_STEPS[displayStatus]?.length ?? 0) > i;
+                      const active = STATUS_STEPS[displayStatus]?.[STATUS_STEPS[displayStatus].length - 1] === step;
                       return (
                         <React.Fragment key={step}>
                           <div className="flex flex-col items-center">
