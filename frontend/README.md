@@ -1,32 +1,43 @@
-# React + TypeScript + Vite
+# IP MatchMaking Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+This is the frontend for the IP MatchMaking application, built using React, TypeScript, Vite, and TailwindCSS.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🐳 Running with Docker
+The easiest way to run this frontend along with the backend and database is from the **root directory** using Docker Compose:
+```bash
+cd ..
+docker-compose up --build -d
+```
+The frontend will be served by Nginx and accessible at `http://localhost`.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 💻 Running Locally (Separate from Backend)
 
-## Expanding the Oxlint configuration
+If you are running the backend separately on your local machine, you can run the frontend in development mode using Vite.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+### 1. Environment Variables
+If your backend is running on a different port than the default, make sure to configure it in a `.env` file. By default, Vite proxies requests or expects the backend on `localhost:5000`.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 2. Install Dependencies
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 3. Start the Development Server
+```bash
+npm run dev
+```
+Vite will start a local development server and output a local URL (e.g., `http://localhost:5173`). Open this URL in your browser to view the app.
+
+### 4. Build for Production
+To build the application into static files (which can be served via Nginx, Apache, or other hosting platforms):
+```bash
+npm run build
+```
+The output will be generated in the `dist/` directory. You can preview the production build using:
+```bash
+npm run preview
+```
