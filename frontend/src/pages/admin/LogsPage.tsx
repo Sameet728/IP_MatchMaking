@@ -38,7 +38,7 @@ export const LogsPage: React.FC = () => {
               <div className={`shrink-0 w-20 font-bold ${log.level === 'Info' ? 'text-blue-400' : log.level === 'Warning' ? 'text-yellow-400' : 'text-red-400'}`}>
                 [{log.level}]
               </div>
-              <div className="text-navy-200 shrink-0 w-48">{log.user}</div>
+              <div className="text-navy-200 shrink-0 w-48">{log.user?.name || log.userName || log.user}</div>
               <div className="text-white flex-1">{log.action}</div>
               <div className="text-navy-500 shrink-0">{log.ip}</div>
             </div>

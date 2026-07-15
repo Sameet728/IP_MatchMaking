@@ -153,6 +153,58 @@ export const createPatent = async (req: AuthRequest, res: Response, next: NextFu
   } catch (err) { next(err); }
 };
 
+// ─── POST /api/patents/bulk ───────────────────────────────────────
+export const createBulkPatents = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { patents } = req.body;
+    if (!Array.isArray(patents) || patents.length === 0) {
+      throw new AppError('An array of patents is required.', 400);
+    }
+
+    let successCount = 0;
+    const errors: { index: number; title: string; error: string }[] = [];
+
+    // Process each patent sequentially
+    // In a production environment with massive CSVs, a bulk INSERT or transaction is better.
+    // For this implementation, looping with individual inserts works fine for normal batches (100s).
+    for (let i = 0; i < patents.length; i++) {
+      const p = patents[i];
+      try {
+        if (!p.title || !p.abstract || !p.domain) {
+          errors.push({ index: i, title: p.title || 'Unknown', error: 'Missing required fields: title, abstract, or domain.' });
+          continue;
+        }
+
+        const id = uuidv4();
+        await db.query(`
+          INSERT INTO "Patent" (id, title, "patentNumber", "applicationNumber", status, type, "filingDate", "grantDate", "expiryDate", country, "ipcCodes", "cpcCodes", abstract, description, claims, domain, "subDomain", keywords, trl, "isListed", "askingPrice", "royaltyRate", "licenseType", "isExclusive", "coInventors", "inventorId", "organizationId", "updatedAt")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, NOW())
+        `, [
+          id, p.title, p.patentNumber || null, p.applicationNumber || null, p.status || 'FILED', p.type || 'UTILITY',
+          p.filingDate ? new Date(p.filingDate) : null, p.grantDate ? new Date(p.grantDate) : null, p.expiryDate ? new Date(p.expiryDate) : null,
+          p.country || 'India', p.ipcCodes || [], p.cpcCodes || [], p.abstract, p.description || null, p.claims || null,
+          p.domain, p.subDomain || null, p.keywords || [], p.trl ? parseInt(p.trl) : 1, p.isListed || false,
+          p.askingPrice ? parseFloat(p.askingPrice) : null, p.royaltyRate ? parseFloat(p.royaltyRate) : null,
+          p.licenseType || null, p.isExclusive || false, p.coInventors || [], req.user!.id, req.user!.organizationId || null
+        ]);
+
+        successCount++;
+        await logAudit({
+          userId: req.user!.id, action: 'CREATE_PATENT_BULK', entity: 'Patent', entityId: id,
+          ipAddress: req.ip, userAgent: req.headers['user-agent']
+        });
+      } catch (err: any) {
+        errors.push({ index: i, title: p.title, error: err.message });
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      data: { count: successCount, errors }
+    });
+  } catch (err) { next(err); }
+};
+
 // ─── PATCH /api/patents/:id ───────────────────────────────────────
 export const updatePatent = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {

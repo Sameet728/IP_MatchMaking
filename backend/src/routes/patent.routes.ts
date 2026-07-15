@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authenticate, optionalAuth } from '../middleware/authenticate';
 import {
   getPatents, getPatentById, createPatent, updatePatent,
-  deletePatent, toggleSavePatent, getSavedPatents, downloadAIReport
+  deletePatent, toggleSavePatent, getSavedPatents, downloadAIReport, createBulkPatents
 } from '../controllers/patent.controller';
 import { logAudit } from '../lib/audit';
 
@@ -16,6 +16,7 @@ router.get('/:id/ai-report/download', optionalAuth, downloadAIReport);
 
 // Protected — must be logged in
 router.post('/', authenticate, createPatent);
+router.post('/bulk', authenticate, createBulkPatents);
 router.patch('/:id', authenticate, updatePatent);
 router.delete('/:id', authenticate, deletePatent);
 router.post('/:id/save', authenticate, toggleSavePatent);

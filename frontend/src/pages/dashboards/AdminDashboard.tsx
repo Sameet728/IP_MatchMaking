@@ -34,9 +34,11 @@ const AUDIT_LOGS = [
 ];
 
 export const AdminDashboard: React.FC = () => {
-  const { data: statsData } = useFetch<any>('/admin/stats');
-  const { data: auditResp } = useFetch<any>('/admin/audit-logs?limit=5');
+  const { data: statsData, loading: statsLoading } = useFetch<any>('/admin/stats');
+  const { data: auditResp, loading: logsLoading } = useFetch<any>('/admin/audit-logs?limit=5');
   const logs = (auditResp?.data || auditResp || AUDIT_LOGS).slice(0, 5);
+
+  if (statsLoading || logsLoading) return <div className="p-6 text-text-muted">Loading admin platform...</div>;
 
   // Derive summary numbers from grouped stats
   const totalUsers = statsData?.users?.reduce((s: number, u: any) => s + u.count, 0) ?? '—';
@@ -159,7 +161,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="mt-0.5 shrink-0">{icons[logType as keyof typeof icons] || icons.info}</div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs text-text-primary line-clamp-2">{log.action || log.description}</div>
-                    <div className="text-[10px] text-text-muted mt-0.5">{log.user || log.userName} · {formatRelativeTime(log.time || log.createdAt)}</div>
+                    <div className="text-[10px] text-text-muted mt-0.5">{log.user?.name || log.user || log.userName} · {formatRelativeTime(log.time || log.createdAt)}</div>
                   </div>
                 </div>
               );

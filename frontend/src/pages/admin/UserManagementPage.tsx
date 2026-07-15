@@ -21,6 +21,8 @@ export const UserManagementPage: React.FC = () => {
   const { data: fetchedUsers, loading } = useFetch<any[]>('/admin/users');
   const users = fetchedUsers || [];
 
+  if (loading) return <div className="p-6 text-text-muted">Loading users...</div>;
+
   const filteredUsers = users.filter(u => {
     const q = search.toLowerCase();
     return (roleFilter === 'All' || u.role === roleFilter.toUpperCase()) &&

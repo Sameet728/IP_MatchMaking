@@ -30,6 +30,13 @@ const QUARTERLY_DATA = [
   { q: 'Q2 2024', received: 880000, pending: 95000, overdue: 25000 },
 ];
 
+const REVENUE_TREND = [
+  { month: 'Jan', revenue: 65000 }, { month: 'Feb', revenue: 78000 },
+  { month: 'Mar', revenue: 82000 }, { month: 'Apr', revenue: 95000 },
+  { month: 'May', revenue: 89000 }, { month: 'Jun', revenue: 105000 },
+  { month: 'Jul', revenue: 120000 },
+];
+
 export const RoyaltiesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -37,6 +44,8 @@ export const RoyaltiesPage: React.FC = () => {
 
   const { data: fetchedRoyalties, loading } = useFetch<any[]>('/royalties');
   const royalties = fetchedRoyalties || [];
+
+  if (loading) return <div className="p-6 text-text-muted">Loading royalties...</div>;
 
   const filtered = royalties.filter(r => {
     const q = search.toLowerCase();

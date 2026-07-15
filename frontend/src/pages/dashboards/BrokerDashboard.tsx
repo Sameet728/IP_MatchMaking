@@ -26,8 +26,10 @@ const NEGOTIATION_STAGES = [
 export const BrokerDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const profile = user?.profile as { dealsCompleted: number; totalCommissions: number; activeDeals: number; specializations: string[] } | undefined;
-  const { data: fetchedDeals } = useFetch<any[]>('/deals');
+  const { data: fetchedDeals, loading } = useFetch<any[]>('/deals');
   const deals = fetchedDeals || [];
+
+  if (loading) return <div className="p-6 text-text-muted">Loading broker dashboard...</div>;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

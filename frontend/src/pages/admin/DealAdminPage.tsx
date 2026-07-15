@@ -11,6 +11,8 @@ export const DealAdminPage: React.FC = () => {
   const { data: fetchedDeals, loading } = useFetch<any[]>('/deals');
   const deals = fetchedDeals || [];
 
+  if (loading) return <div className="p-6 text-text-muted">Loading deals...</div>;
+
   const filteredDeals = deals.filter(d => 
     !search || (d.patents?.[0]?.title || '').toLowerCase().includes(search.toLowerCase()) || (d.buyer?.name || '').toLowerCase().includes(search.toLowerCase())
   );

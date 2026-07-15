@@ -28,8 +28,8 @@ router.post('/analyze/:patentId', authenticate, async (req: AuthRequest, res: Re
 
     const id = uuidv4();
     const { rows } = await db.query(`
-      INSERT INTO "AIAnalysisJob" (id, "patentId", "userId", status, "updatedAt")
-      VALUES ($1, $2, $3, 'queued', NOW()) RETURNING *
+      INSERT INTO "AIAnalysisJob" (id, "patentId", "userId", status)
+      VALUES ($1, $2, $3, 'queued') RETURNING *
     `, [id, patentId, req.user!.id]);
     const job = rows[0];
 
