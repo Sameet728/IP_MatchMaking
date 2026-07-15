@@ -27,8 +27,8 @@ const QUICK_ACTIONS = [
 
 export const MessagesPage: React.FC = () => {
   const { user } = useAuthStore();
-  const { data: dealsResponse, loading: dealsLoading } = useFetch<any>('/api/deals?limit=50');
-  const deals = dealsResponse?.data || [];
+  const { data: dealsResponse, loading: dealsLoading } = useFetch<any>('/deals?limit=50');
+  const deals = dealsResponse || [];
 
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -53,7 +53,7 @@ export const MessagesPage: React.FC = () => {
     if (!activeDealId) return;
     
     setMessagesLoading(true);
-    api.get(`/api/deals/${activeDealId}/messages`)
+    api.get(`/deals/${activeDealId}/messages`)
       .then(res => setMessages(res.data.data))
       .catch(err => console.error(err))
       .finally(() => setMessagesLoading(false));
@@ -98,7 +98,7 @@ export const MessagesPage: React.FC = () => {
       
       // We don't optimistically append to array because the socket event 'new_message' 
       // will arrive immediately and we don't want duplicates.
-      await api.post(`/api/deals/${activeDealId}/messages`, payload);
+      await api.post(`/deals/${activeDealId}/messages`, payload);
     } catch (err) {
       console.error('Failed to send message', err);
     }

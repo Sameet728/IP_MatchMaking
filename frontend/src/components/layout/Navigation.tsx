@@ -124,8 +124,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const navigate = useNavigate();
-  const role = user?.role || 'inventor';
-  const navItems = NAV_ITEMS[role];
+  const role = (user?.role?.toLowerCase() as UserRole) || 'inventor';
+  const navItems = NAV_ITEMS[role] || NAV_ITEMS.inventor;
 
   const handleLogout = () => {
     logout();
@@ -163,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             {ROLE_LABELS[role]}
           </span>
           <div className="text-xs text-navy-300 font-medium mt-0.5 truncate">{user.name}</div>
-          <div className="text-[10px] text-navy-500 truncate">{user.organization}</div>
+          <div className="text-[10px] text-navy-500 truncate">{user.organization?.name || 'Independent'}</div>
         </div>
       )}
 

@@ -214,7 +214,7 @@ export const PatentPortfolioPage: React.FC = () => {
                         <span className="text-[11px] text-text-muted italic">Not analyzed</span>
                       )}
                     </td>
-                    <td className="text-xs text-text-muted"><Eye size={11} className="inline mr-1" />{p.views.toLocaleString()}</td>
+                    <td className="text-xs text-text-muted"><Eye size={11} className="inline mr-1" />{(p.views || 0).toLocaleString()}</td>
                     <td className="text-xs font-semibold">{p.listingPrice ? formatCurrency(p.listingPrice) : <span className="text-text-muted">—</span>}</td>
                     <td className="text-xs text-text-muted whitespace-nowrap">{formatDate(p.filingDate)}</td>
                     <td>

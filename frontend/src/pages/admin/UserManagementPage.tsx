@@ -84,7 +84,7 @@ export const UserManagementPage: React.FC = () => {
                       {user.role}
                     </span>
                   </td>
-                  <td className="text-xs text-text-muted">{user.organization || '—'}</td>
+                  <td className="text-xs text-text-muted">{user.organization?.name || '—'}</td>
                   <td>
                     <div className="flex items-center gap-1.5 text-xs">
                       {user.verified ? (

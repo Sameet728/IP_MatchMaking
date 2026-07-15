@@ -7,8 +7,8 @@ import { useFetch } from '../../hooks/useApi';
 
 export const SavedPatentsPage: React.FC = () => {
   // Using the public feed endpoint for mock data since we don't have a /api/patents/saved endpoint in this phase.
-  const { data: response, loading } = useFetch<any>('/api/patents?limit=6');
-  const savedPatents = response?.data || [];
+  const { data: response, loading } = useFetch<any>('/patents?limit=6');
+  const savedPatents = response || [];
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto min-h-full">

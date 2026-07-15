@@ -79,7 +79,7 @@ export const PatentDetailPage: React.FC = () => {
             { label: 'Claims', value: patent.claims },
             { label: 'Family Size', value: patent.familySize },
             { label: 'Citations', value: patent.citations },
-            { label: 'Views', value: patent.views.toLocaleString() },
+            { label: 'Views', value: (patent.views || 0).toLocaleString() },
           ].map(s => (
             <div key={s.label} className="text-center">
               <div className={cn('text-xl font-bold', (s as any).color || 'text-text-primary')}>{s.value}</div>

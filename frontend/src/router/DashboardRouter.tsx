@@ -23,7 +23,8 @@ const ROLE_DASHBOARDS: Record<UserRole, React.ComponentType> = {
 export const DashboardRouter: React.FC = () => {
   const { user, isAuthenticated } = useAuthStore();
   if (!isAuthenticated || !user) return <Navigate to="/auth/login" replace />;
-  const Dashboard = ROLE_DASHBOARDS[user.role] || InventorDashboard;
+  const role = (user.role?.toLowerCase() as UserRole) || 'inventor';
+  const Dashboard = ROLE_DASHBOARDS[role] || InventorDashboard;
   return <Dashboard />;
 };
 

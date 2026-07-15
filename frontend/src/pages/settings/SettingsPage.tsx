@@ -33,8 +33,8 @@ export const SettingsPage: React.FC = () => {
 
   const handleSubscribe = async (planId: string) => {
     try {
-      await api.post('/api/billing/subscribe', { planId });
-      alert('Subscription upgraded successfully! (Mock Demo)');
+      await api.post('/billing/subscribe', { planId });
+      toast.success('Subscription plan updated');
     } catch (e) {
       alert('Failed to upgrade subscription.');
     }

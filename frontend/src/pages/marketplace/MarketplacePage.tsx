@@ -44,7 +44,7 @@ export const MarketplacePage: React.FC = () => {
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const { data: response, loading } = useFetch<any>('/patents?isListed=true');
-  const listedPatents = response?.data || [];
+  const listedPatents = response || [];
 
   const filtered = useMemo(() => {
     return listedPatents

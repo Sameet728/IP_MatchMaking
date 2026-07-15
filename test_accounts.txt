@@ -1,0 +1,27 @@
+====================================
+IP Commercialization OS - Test Accounts
+====================================
+
+All accounts use the same password:
+Password: password123
+
+Accounts by Role:
+------------------------------------
+1. Admin (Full System Access)
+   Email: admin@ipcos.in
+
+2. Inventor (Creates Patents, Negotiates Deals)
+   Email: inventor@demo.com
+
+3. University (Tech Transfer Office)
+   Email: university@demo.com
+
+4. Startup (Licensee/Buyer)
+   Email: startup@demo.com
+
+5. Enterprise (Large Corporation/Buyer)
+   Email: enterprise@demo.com
+
+6. Broker (Facilitates Deals)
+   Email: broker@demo.com
+====================================

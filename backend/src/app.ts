@@ -54,8 +54,10 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Try again in 15 minutes.' },
 });
 
-app.use('/api/', limiter);
-app.use('/api/auth', authLimiter);
+if (process.env.NODE_ENV === 'production') {
+  app.use('/api/', limiter);
+  app.use('/api/auth', authLimiter);
+}
 
 // ─── Body Parsing ───────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));

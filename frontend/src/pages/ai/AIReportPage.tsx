@@ -230,7 +230,7 @@ export const AIReportPage: React.FC = () => {
                   <span className="text-[11px] text-text-muted flex items-center gap-1"><Clock size={10} /> Generated {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
                 <h1 className="text-lg font-bold text-text-primary max-w-3xl leading-tight">{patent.title}</h1>
-                <p className="text-xs text-text-muted mt-1">{patent.patentNumber} · {patent.assignee} · {patent.technologyDomain}</p>
+                <p className="text-xs text-text-muted mt-1">{patent.patentNumber || 'Pending'} · {patent.organization?.name || patent.inventor?.organization?.name || patent.inventor?.name} · {patent.domain}</p>
               </div>
               <div className="flex gap-2 shrink-0">
                 <button onClick={() => setGenerating(true)} className="btn-ghost text-xs gap-1"><RefreshCw size={13} /> Refresh</button>
@@ -423,13 +423,19 @@ export const AIReportPage: React.FC = () => {
                 {(report?.overallScore || 0) >= 85 ? '⭐ Top Tier Patent' : (report?.overallScore || 0) >= 70 ? '✅ Strong Commercial Value' : '⚡ Moderate Potential'}
               </p>
             </div>
-            <ResponsiveContainer width="100%" height={160} className="mt-3">
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="#E2E8F0" />
-                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 9, fill: '#94A3B8' }} />
-                <Radar dataKey="value" stroke="#2563EB" fill="#2563EB" fillOpacity={0.12} strokeWidth={1.5} />
-              </RadarChart>
-            </ResponsiveContainer>
+            {radarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={160} className="mt-3">
+                <RadarChart data={radarData}>
+                  <PolarGrid stroke="#E2E8F0" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 9, fill: '#94A3B8' }} />
+                  <Radar dataKey="value" stroke="#2563EB" fill="#2563EB" fillOpacity={0.12} strokeWidth={1.5} />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[160px] flex items-center justify-center text-xs text-text-muted mt-3 bg-navy-50 rounded-xl border border-border">
+                Radar data unavailable
+              </div>
+            )}
           </motion.div>
 
           {/* Potential buyers */}

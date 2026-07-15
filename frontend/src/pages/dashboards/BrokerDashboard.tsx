@@ -32,8 +32,8 @@ export const BrokerDashboard: React.FC = () => {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="page-title">Broker Command Center</h1>
-            <p className="text-text-muted text-sm mt-1">{user?.name} · {user?.organization} · {profile?.specializations?.join(', ')}</p>
+            <h1 className="page-title">Broker Dashboard</h1>
+            <p className="text-text-muted text-sm mt-1">{user?.name} · {user?.organization?.name || 'Independent'} · {profile?.specializations?.join(', ')}</p>
           </div>
           <div className="flex gap-2">
             <Link to="/deals" className="btn-primary text-xs">View Active Deals</Link>

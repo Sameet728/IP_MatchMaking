@@ -6,12 +6,12 @@ import { Eye, EyeOff, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import type { UserRole } from '../../types';
 
 const ROLE_DEMOS: { role: UserRole; label: string; email: string; color: string }[] = [
-  { role: 'inventor', label: 'Inventor', email: 'dr.ramesh@iitbombay.edu', color: 'bg-accent/10 text-accent border-accent/20' },
-  { role: 'university', label: 'University TTO', email: 'tto@iitdelhi.ac.in', color: 'bg-success/10 text-success border-success/20' },
-  { role: 'startup', label: 'Startup', email: 'cto@nexagen.ai', color: 'bg-warning/10 text-warning border-warning/20' },
-  { role: 'enterprise', label: 'Enterprise', email: 'ip@tatainnovations.com', color: 'bg-navy-100 text-navy-700 border-navy-200' },
-  { role: 'broker', label: 'Broker', email: 'rahul@ipbridges.in', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-  { role: 'admin', label: 'Admin', email: 'admin@ipcos.io', color: 'bg-danger/10 text-danger border-danger/20' },
+  { role: 'inventor', label: 'Inventor', email: 'inventor@demo.com', color: 'bg-accent/10 text-accent border-accent/20' },
+  { role: 'university', label: 'University TTO', email: 'university@demo.com', color: 'bg-success/10 text-success border-success/20' },
+  { role: 'startup', label: 'Startup', email: 'startup@demo.com', color: 'bg-warning/10 text-warning border-warning/20' },
+  { role: 'enterprise', label: 'Enterprise', email: 'enterprise@demo.com', color: 'bg-navy-100 text-navy-700 border-navy-200' },
+  { role: 'broker', label: 'Broker', email: 'broker@demo.com', color: 'bg-purple-50 text-purple-600 border-purple-200' },
+  { role: 'admin', label: 'Admin', email: 'admin@ipcos.in', color: 'bg-danger/10 text-danger border-danger/20' },
 ];
 
 export const LoginPage: React.FC = () => {
@@ -27,9 +27,9 @@ export const LoginPage: React.FC = () => {
     if (ok) navigate('/dashboard');
   };
 
-  const handleDemoLogin = (role: UserRole) => {
-    loginAsRole(role);
-    navigate('/dashboard');
+  const handleDemoLogin = async (email: string) => {
+    const ok = await login(email, 'password123');
+    if (ok) navigate('/dashboard');
   };
 
   return (
@@ -176,8 +176,9 @@ export const LoginPage: React.FC = () => {
             {ROLE_DEMOS.map((d) => (
               <button
                 key={d.role}
-                onClick={() => handleDemoLogin(d.role)}
-                className={`px-2 py-2 rounded-md border text-xs font-semibold transition-all hover:shadow-sm ${d.color}`}
+                onClick={() => handleDemoLogin(d.email)}
+                disabled={isLoading}
+                className={`px-2 py-2 rounded-md border text-xs font-semibold transition-all hover:shadow-sm ${d.color} disabled:opacity-50`}
               >
                 {d.label}
               </button>

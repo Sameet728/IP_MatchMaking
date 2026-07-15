@@ -407,6 +407,66 @@ async function main() {
     ]
   });
 
+  // ─── Create AI Match Data ───
+  console.log('Building AI Match Data...');
+  
+  const matchReq1 = await prisma.matchRequest.create({
+    data: {
+      organizationId: orgStartup.id,
+      domains: ['ENERGY'],
+      keywords: ['solid-state', 'battery', 'EV'],
+      minTrl: 5,
+      maxBudget: 3000000,
+      notes: 'Looking for solid-state battery patents or exclusive licenses.',
+    }
+  });
+
+  const matchReq2 = await prisma.matchRequest.create({
+    data: {
+      organizationId: orgAuto.id,
+      domains: ['AI_ML'],
+      keywords: ['navigation', 'autonomous', 'drone'],
+      minTrl: 6,
+      maxBudget: 5000000,
+      notes: 'Acquiring IP related to autonomous drone or vehicle navigation.',
+    }
+  });
+
+  await prisma.matchResult.createMany({
+    data: [
+      {
+        matchRequestId: matchReq1.id,
+        patentId: createdPatents[0].id,
+        matchScore: 94,
+        reasons: ['Exact match on solid-state battery technology', 'TRL exceeds minimum requirement', 'Budget alignment is favorable'],
+        risks: ['Pricing negotiation required'],
+        status: 'new',
+        dealProbability: 75,
+        estimatedRevenue: 2500000,
+      },
+      {
+        matchRequestId: matchReq1.id,
+        patentId: createdPatents[9].id,
+        matchScore: 78,
+        reasons: ['Domain match (Energy)', 'TRL 6 is acceptable'],
+        risks: ['Perovskite solar cell is not directly related to battery storage'],
+        status: 'new',
+        dealProbability: 20,
+        estimatedRevenue: 1000000,
+      },
+      {
+        matchRequestId: matchReq2.id,
+        patentId: createdPatents[4].id,
+        matchScore: 92,
+        reasons: ['Direct hit for autonomous navigation without GPS', 'AI/ML domain matches precisely'],
+        risks: [],
+        status: 'contacted',
+        dealProbability: 85,
+        estimatedRevenue: 3000000,
+      }
+    ]
+  });
+
   console.log('✅ Seed completed successfully!');
   console.log('====================================');
   console.log('Test Users (Password: password123)');

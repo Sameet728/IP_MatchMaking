@@ -48,7 +48,7 @@ export const InventorDashboard: React.FC = () => {
       {/* Page header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
         <h1 className="page-title">Inventor Dashboard</h1>
-        <p className="text-text-muted text-sm mt-1">Welcome back, {user?.name} · {user?.organization}</p>
+        <p className="text-text-muted text-sm mt-1">Welcome back, {user?.name} · {user?.organization?.name || 'Independent'}</p>
       </motion.div>
 
       {/* KPI row */}
@@ -129,7 +129,7 @@ export const InventorDashboard: React.FC = () => {
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className={getStatusBadgeClass(p.status)}>{p.status}</span>
                     <span className="text-[10px] text-text-muted">TRL {p.trl}</span>
-                    <span className="text-[10px] text-text-muted ml-auto"><Eye size={10} className="inline mr-0.5" />{p.views.toLocaleString()}</span>
+                    <span className="text-[10px] text-text-muted ml-auto"><Eye size={10} className="inline mr-0.5" />{(p.views || 0).toLocaleString()}</span>
                   </div>
                 </div>
                 {p.aiReport && (
