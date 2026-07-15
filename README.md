@@ -56,6 +56,17 @@ You can use either a local database or a cloud database like **Neon**:
      psql -U postgres -d ipcos -f backend/schema.sql
      ```
 
+### 3. Database Seeding (Optional)
+To populate the database with mock records (1,000+ patents, reports, match results, messages, royalties, and audit logs) for testing:
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Run the seeding command:
+   ```bash
+   npm run seed
+   ```
+
 ### 2. Backend Setup
 1. Open a terminal and navigate to the backend directory:
    ```bash
