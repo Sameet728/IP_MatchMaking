@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from 'recharts';
 import { Search, Star, Handshake, Brain, TrendingUp, Globe, ArrowRight, Bookmark, Zap } from 'lucide-react';
 import { StatCard, SectionHeader, ScoreRing, ProgressBar, Badge } from '../../components/ui/StatCard';
-import { MOCK_PATENTS, MATCH_SCORES_DATA } from '../../data/mockData';
 import { formatCurrency, getStatusBadgeClass } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useFetch } from '../../hooks/useApi';
 
 const NEED_MATCH_DATA = [
   { tech: 'NLP', available: 24, match: 18 },
@@ -19,7 +19,8 @@ const NEED_MATCH_DATA = [
 export const StartupDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const profile = user?.profile as { company: string; industry: string; stage: string; fundingRaised: number } | undefined;
-  const recommendedPatents = MOCK_PATENTS.filter((p) => p.isListed).slice(0, 4);
+  const { data: fetchedPatents } = useFetch<any[]>('/patents?isListed=true&limit=4');
+  const recommendedPatents = fetchedPatents || [];
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

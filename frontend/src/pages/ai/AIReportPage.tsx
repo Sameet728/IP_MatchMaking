@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -136,18 +136,63 @@ const SWOT_COLORS = {
 
 export const AIReportPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { data: patentData, loading } = useFetch<any>(`/patents/${id}`);
+  const { data: patentData, loading: patentLoading } = useFetch<any>(`/patents/${id}`);
   const patent = patentData || null;
-  const report = patent?.aiReport || null;
+  const [report, setReport] = useState<any>(null);
   const [generating, setGenerating] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(true);
+
+  const fetchReport = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await api.get(`/ai/report/${id}`);
+      if (res.data.success) {
+        setReport(res.data.data);
+      }
+    } catch (e) {
+      // Report likely not found
+    } finally {
+      setLoadingReport(false);
+    }
+  }, [id]);
 
   useEffect(() => {
-    if (patent && !report) {
-      setGenerating(true);
-    } else {
+    fetchReport();
+  }, [fetchReport]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!id) return;
+    setGenerating(true);
+    try {
+      await api.post(`/ai/analyze/${id}`);
+      const interval = setInterval(async () => {
+        try {
+          const res = await api.get(`/ai/analyze/${id}/status`);
+          if (res.data.success) {
+            const status = res.data.data?.status;
+            if (status === 'completed') {
+              clearInterval(interval);
+              await fetchReport();
+              setGenerating(false);
+            } else if (status === 'failed') {
+              clearInterval(interval);
+              setGenerating(false);
+              alert('AI Analysis failed.');
+            }
+          }
+        } catch (e) { }
+      }, 3000);
+    } catch (err) {
       setGenerating(false);
+      alert('Failed to start AI Analysis');
     }
-  }, [patent, report]);
+  }, [id, fetchReport]);
+
+  useEffect(() => {
+    if (patent && !report && !loadingReport && !generating) {
+      handleGenerate();
+    }
+  }, [patent, report, loadingReport, generating, handleGenerate]);
 
   const handleDownload = async () => {
     try {
@@ -164,7 +209,7 @@ export const AIReportPage: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-6">Loading AI Report...</div>;
+  if (patentLoading || loadingReport) return <div className="p-6">Loading AI Report...</div>;
   if (!patent) return <div className="p-6">Patent not found</div>;
 
   const extended = getExtendedReport(patent.id);
@@ -172,13 +217,6 @@ export const AIReportPage: React.FC = () => {
   const radarData = report ? Object.keys(SCORE_LABELS).map(k => ({
     subject: SCORE_LABELS[k], value: report[k as keyof typeof report] as number,
   })) : [];
-
-  useEffect(() => {
-    if (generating) {
-      const t = setTimeout(() => setGenerating(false), 3000);
-      return () => clearTimeout(t);
-    }
-  }, [generating]);
 
   if (generating) {
     return (
@@ -227,13 +265,13 @@ export const AIReportPage: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="badge badge-accent">AI-Powered Report</span>
-                  <span className="text-[11px] text-text-muted flex items-center gap-1"><Clock size={10} /> Generated {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  <span className="text-[11px] text-text-muted flex items-center gap-1"><Clock size={10} /> Generated {report?.generatedAt ? new Date(report.generatedAt).toLocaleDateString() : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
                 <h1 className="text-lg font-bold text-text-primary max-w-3xl leading-tight">{patent.title}</h1>
                 <p className="text-xs text-text-muted mt-1">{patent.patentNumber || 'Pending'} · {patent.organization?.name || patent.inventor?.organization?.name || patent.inventor?.name} · {patent.domain}</p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => setGenerating(true)} className="btn-ghost text-xs gap-1"><RefreshCw size={13} /> Refresh</button>
+                <button onClick={handleGenerate} className="btn-ghost text-xs gap-1"><RefreshCw size={13} /> Refresh</button>
                 <button onClick={() => window.print()} className="btn-ghost text-xs gap-1"><Printer size={13} /> Print</button>
                 <button onClick={handleDownload} className="btn-secondary text-xs gap-1"><Download size={13} /> Export PDF</button>
               </div>

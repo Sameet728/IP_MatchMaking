@@ -3,15 +3,19 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Archive, TrendingUp, Users, DollarSign, Building2, ArrowRight, FileText, Handshake } from 'lucide-react';
 import { StatCard, SectionHeader, ProgressBar } from '../../components/ui/StatCard';
-import { UNIVERSITY_DEPARTMENTS, DOMAIN_BREAKDOWN, REVENUE_TREND, MOCK_PATENTS, MOCK_DEALS, LICENSING_FUNNEL } from '../../data/mockData';
 import { formatCurrency, getStatusBadgeClass } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useFetch } from '../../hooks/useApi';
 
 const DEPT_COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#EC4899', '#14B8A6'];
 
 export const UniversityDashboard: React.FC = () => {
   const { user } = useAuthStore();
+  const { data: fetchedPatents } = useFetch<any[]>('/patents');
+  const { data: fetchedDeals } = useFetch<any[]>('/deals');
+  const patents = fetchedPatents || [];
+  const deals = fetchedDeals || [];
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -31,10 +35,10 @@ export const UniversityDashboard: React.FC = () => {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Patents', value: 387, icon: <Archive size={15} />, change: 12, trend: 'up' as const },
-          { label: 'Licensed Patents', value: 89, icon: <Handshake size={15} />, change: 23, trend: 'up' as const },
-          { label: 'Revenue Generated', value: 145000000, isCurrency: true, icon: <DollarSign size={15} />, change: 38, trend: 'up' as const },
-          { label: 'Active Inventors', value: 284, icon: <Users size={15} />, change: 9, trend: 'up' as const },
+          { label: 'Total Patents', value: patents.length || 0, icon: <Archive size={15} />, change: 12, trend: 'up' as const },
+          { label: 'Licensed Patents', value: patents.filter((p: any) => p.status === 'LICENSED').length, icon: <Handshake size={15} />, change: 23, trend: 'up' as const },
+          { label: 'Revenue Generated', value: deals.reduce((s: number, d: any) => s + (d.dealValue || 0), 0), isCurrency: true, icon: <DollarSign size={15} />, change: 38, trend: 'up' as const },
+          { label: 'Active Deals', value: deals.filter((d: any) => d.status === 'ACTIVE').length, icon: <Users size={15} />, change: 9, trend: 'up' as const },
         ].map((kpi, i) => (
           <motion.div key={kpi.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
             <StatCard {...kpi} changeLabel="vs last year" />

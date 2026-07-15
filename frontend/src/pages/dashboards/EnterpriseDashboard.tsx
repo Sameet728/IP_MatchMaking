@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ScatterChart, Scatter } from 'recharts';
 import { Briefcase, Search, Brain, DollarSign, TrendingUp, Globe, ArrowRight, Building2, Target, Shield } from 'lucide-react';
 import { StatCard, SectionHeader, ScoreRing, ProgressBar, Badge } from '../../components/ui/StatCard';
-import { MOCK_PATENTS, MATCH_SCORES_DATA, DOMAIN_BREAKDOWN, REVENUE_TREND } from '../../data/mockData';
 import { formatCurrency, getStatusBadgeClass, cn } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useFetch } from '../../hooks/useApi';
 
 const ACQUISITION_PIPELINE = [
   { stage: 'Scouted', count: 47, value: 120000000 },
@@ -24,7 +24,8 @@ const ROI_DATA = [
 export const EnterpriseDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const profile = user?.profile as { company: string; industry: string; ipBudget: number; acquisitions: number } | undefined;
-  const featuredPatents = MOCK_PATENTS.filter((p) => p.isFeatured).slice(0, 3);
+  const { data: fetchedPatents } = useFetch<any[]>('/patents?isListed=true&limit=3');
+  const featuredPatents = fetchedPatents || [];
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

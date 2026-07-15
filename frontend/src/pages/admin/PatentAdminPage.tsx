@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FileText, Search, Filter, AlertTriangle, Eye, ShieldAlert, CheckCircle } from 'lucide-react';
-import { MOCK_PATENTS } from '../../data/mockData';
+import { useFetch } from '../../hooks/useApi';
 import { cn, formatDate } from '../../lib/utils';
 import { SectionHeader } from '../../components/ui/StatCard';
 
 export const PatentAdminPage: React.FC = () => {
   const [search, setSearch] = useState('');
 
-  const filteredPatents = MOCK_PATENTS.filter(p => 
-    !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.patentNumber.toLowerCase().includes(search.toLowerCase())
+  const { data: fetchedPatents, loading } = useFetch<any[]>('/patents');
+  const patents = fetchedPatents || [];
+
+  const filteredPatents = patents.filter(p => 
+    !search || p.title.toLowerCase().includes(search.toLowerCase()) || (p.patentNumber || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

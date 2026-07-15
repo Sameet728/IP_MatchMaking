@@ -6,7 +6,8 @@ import {
   Building2, Eye, Download, Share2, Star, Handshake, ChevronDown,
   ChevronUp, Users, BarChart3, Shield, ExternalLink, Clock, CheckCircle
 } from 'lucide-react';
-import { MOCK_PATENTS } from '../../data/mockData';
+import { useFetch } from '../../hooks/useApi';
+import api from '../../lib/api';
 import { cn, formatCurrency, formatDate, getStatusBadgeClass } from '../../lib/utils';
 import { ScoreRing, ProgressBar, SectionHeader } from '../../components/ui/StatCard';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts';
@@ -19,9 +20,24 @@ const RADAR_LABELS: Record<string, string> = {
 
 export const PatentDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const patent = MOCK_PATENTS.find(p => p.id === id) || MOCK_PATENTS[0];
+  const { data: patent, loading } = useFetch<any>(`/patents/${id}`);
   const [showFullAbstract, setShowFullAbstract] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'technical' | 'commercial' | 'family'>('overview');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await api.post(`/patents/${id}/save`);
+      setSaved(s => !s);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="p-6 text-text-muted">Loading patent...</div>;
+  if (!patent) return <div className="p-6 text-text-muted">Patent not found.</div>;
 
   const radarData = patent.aiReport ? RADAR_KEYS.map(k => ({
     subject: RADAR_LABELS[k], value: patent.aiReport![k],

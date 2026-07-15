@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, Navigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Brain, Download, Building2, Calendar, CheckCircle, Clock, ChevronRight } from 'lucide-react';
-import { MOCK_DEALS } from '../../data/mockData';
+import { useFetch } from '../../hooks/useApi';
 import { cn, formatCurrency, formatDate } from '../../lib/utils';
 import { SectionHeader } from '../../components/ui/StatCard';
 
@@ -10,10 +10,12 @@ const STATUS_STEPS = ['NDA Signed', 'Term Sheet', 'Due Diligence', 'Negotiating'
 
 export const DealDetailsPage: React.FC = () => {
   const { id } = useParams();
-  const deal = MOCK_DEALS.find(d => d.id === id);
+  const { data: deal, loading } = useFetch<any>(id ? `/deals/${id}` : '');
 
+  if (loading) return <div className="p-6 text-text-muted">Loading deal...</div>;
   if (!deal) return <Navigate to="/deals" replace />;
 
+  const STATUS_STEPS = ['NDA_SIGNED', 'TERM_SHEET', 'DUE_DILIGENCE', 'NEGOTIATING', 'ACTIVE', 'SIGNED', 'COMPLETED'];
   const currentStepIndex = STATUS_STEPS.indexOf(deal.status);
   const doneSteps = currentStepIndex >= 0 ? STATUS_STEPS.slice(0, currentStepIndex + 1) : [];
 

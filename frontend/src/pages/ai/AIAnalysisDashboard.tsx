@@ -62,13 +62,27 @@ export const AIAnalysisDashboard: React.FC = () => {
     setAnalyzing(true);
     try {
       await api.post(`/ai/analyze/${selectedPatent.id}`);
-      setTimeout(async () => {
-        await refetch();
-        setAnalyzing(false);
-      }, 5000);
+      const interval = setInterval(async () => {
+        try {
+          const res = await api.get(`/ai/analyze/${selectedPatent.id}/status`);
+          if (res.data.success) {
+            const status = res.data.data?.status;
+            if (status === 'completed') {
+              clearInterval(interval);
+              await refetch();
+              setAnalyzing(false);
+            } else if (status === 'failed') {
+              clearInterval(interval);
+              setAnalyzing(false);
+              alert('AI Analysis failed.');
+            }
+          }
+        } catch (e) {}
+      }, 3000);
     } catch (e) {
       console.error(e);
       setAnalyzing(false);
+      alert('Failed to start AI Analysis');
     }
   };
 

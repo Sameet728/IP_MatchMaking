@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Handshake, DollarSign, TrendingUp, Clock, ArrowRight, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { StatCard, SectionHeader, ProgressBar, Badge } from '../../components/ui/StatCard';
-import { MOCK_DEALS, MOCK_ROYALTIES, REVENUE_TREND } from '../../data/mockData';
 import { formatCurrency, formatDate, getStatusBadgeClass, cn } from '../../lib/utils';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useFetch } from '../../hooks/useApi';
 
 const COMMISSION_DATA = [
   { month: 'Jan', commission: 120000 }, { month: 'Feb', commission: 180000 },
@@ -26,6 +26,8 @@ const NEGOTIATION_STAGES = [
 export const BrokerDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const profile = user?.profile as { dealsCompleted: number; totalCommissions: number; activeDeals: number; specializations: string[] } | undefined;
+  const { data: fetchedDeals } = useFetch<any[]>('/deals');
+  const deals = fetchedDeals || [];
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -112,13 +114,13 @@ export const BrokerDashboard: React.FC = () => {
           <table className="data-table">
             <thead><tr><th>Patent</th><th>Licensee</th><th>Type</th><th>Value</th><th>My Commission (5%)</th><th>Status</th></tr></thead>
             <tbody>
-              {MOCK_DEALS.map((d) => (
+              {deals.map((d: any) => (
                 <tr key={d.id}>
-                  <td className="max-w-[200px] truncate font-medium">{d.patentTitle}</td>
-                  <td>{d.licenseeName}</td>
-                  <td><span className="badge-neutral badge">{d.licenseType}</span></td>
-                  <td className="font-semibold">{formatCurrency(d.upfrontFee)}</td>
-                  <td className="font-semibold text-success">{formatCurrency(d.upfrontFee * 0.05)}</td>
+                  <td className="max-w-[200px] truncate font-medium">{d.patents?.[0]?.title || d.title || '—'}</td>
+                  <td>{d.buyer?.name || '—'}</td>
+                  <td><span className="badge-neutral badge">{d.type || d.licenseType || '—'}</span></td>
+                  <td className="font-semibold">{formatCurrency(d.dealValue || 0)}</td>
+                  <td className="font-semibold text-success">{formatCurrency((d.dealValue || 0) * 0.05)}</td>
                   <td><span className={getStatusBadgeClass(d.status)}>{d.status}</span></td>
                 </tr>
               ))}

@@ -1,26 +1,29 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Search, Filter, Shield, MoreVertical, Edit, Trash2, Mail, CheckCircle } from 'lucide-react';
-import { MOCK_USERS } from '../../data/mockData';
+import { useFetch } from '../../hooks/useApi';
 import { cn, formatDate } from '../../lib/utils';
 import { SectionHeader } from '../../components/ui/StatCard';
 
 const ROLE_COLORS: Record<string, string> = {
-  admin: 'bg-danger/10 text-danger border-danger/20',
-  enterprise: 'bg-primary/10 text-primary border-primary/20',
-  startup: 'bg-accent/10 text-accent border-accent/20',
-  university: 'bg-success/10 text-success border-success/20',
-  inventor: 'bg-warning/10 text-warning border-warning/20',
-  broker: 'bg-navy-200/50 text-navy-600 border-navy-300',
+  ADMIN: 'bg-danger/10 text-danger border-danger/20',
+  ENTERPRISE: 'bg-primary/10 text-primary border-primary/20',
+  STARTUP: 'bg-accent/10 text-accent border-accent/20',
+  UNIVERSITY: 'bg-success/10 text-success border-success/20',
+  INVENTOR: 'bg-warning/10 text-warning border-warning/20',
+  BROKER: 'bg-navy-200/50 text-navy-600 border-navy-300',
 };
 
 export const UserManagementPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
 
-  const filteredUsers = MOCK_USERS.filter(u => {
+  const { data: fetchedUsers, loading } = useFetch<any[]>('/admin/users');
+  const users = fetchedUsers || [];
+
+  const filteredUsers = users.filter(u => {
     const q = search.toLowerCase();
-    return (roleFilter === 'All' || u.role === roleFilter.toLowerCase()) &&
+    return (roleFilter === 'All' || u.role === roleFilter.toUpperCase()) &&
       (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
   });
 

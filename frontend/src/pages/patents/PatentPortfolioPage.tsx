@@ -74,6 +74,46 @@ export const PatentPortfolioPage: React.FC = () => {
 
   const toggleStar = (id: string) => setStarred(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
+  const exportCSV = () => {
+    const headers = [
+      'Patent Number', 'Title', 'Status', 'Domain', 'Country',
+      'Filing Date', 'Grant Date', 'Expiry Date', 'TRL',
+      'Asking Price (USD)', 'Royalty Rate (%)', 'Is Listed',
+      'Inventor', 'Organization', 'Keywords', 'IPC Codes', 'Created At'
+    ];
+
+    const rows = filtered.map(p => [
+      p.patentNumber || '',
+      `"${(p.title || '').replace(/"/g, '""')}"`,
+      p.status || '',
+      p.domain || p.technologyDomain || '',
+      p.country || '',
+      p.filingDate ? new Date(p.filingDate).toLocaleDateString() : '',
+      p.grantDate ? new Date(p.grantDate).toLocaleDateString() : '',
+      p.expiryDate ? new Date(p.expiryDate).toLocaleDateString() : '',
+      p.trl || '',
+      p.askingPrice ?? p.listingPrice ?? '',
+      p.royaltyRate || '',
+      p.isListed ? 'Yes' : 'No',
+      p.inventor?.name || '',
+      p.organization?.name || '',
+      `"${(p.keywords || []).join(', ')}"`,
+      `"${(p.ipcCodes || []).join(', ')}"`,
+      p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '',
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `patents_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -83,7 +123,7 @@ export const PatentPortfolioPage: React.FC = () => {
           <p className="text-text-muted text-sm mt-1">{filtered.length} patents · Showing {Math.min(filtered.length, 50)} results</p>
         </div>
         <div className="flex gap-2">
-          <button className="btn-secondary text-xs"><Download size={13} /> Export</button>
+          <button onClick={exportCSV} disabled={filtered.length === 0} className="btn-secondary text-xs gap-1 disabled:opacity-40"><Download size={13} /> Export CSV ({filtered.length})</button>
           <Link to="/patents/upload" className="btn-primary text-xs"><Plus size={13} /> Add Patent</Link>
         </div>
       </motion.div>

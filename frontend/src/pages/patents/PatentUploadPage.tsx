@@ -7,6 +7,7 @@ import {
   FlaskConical, BookOpen, Paperclip, Image, Video, CloudUpload, Info
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import api from '../../lib/api';
 
 // ─── STEP CONFIG ────────────────────────────────────────────
 const STEPS = [
@@ -25,6 +26,22 @@ const INDUSTRIES = ['Manufacturing', 'Healthcare', 'Energy', 'Agriculture', 'Def
 const TRL_DESCRIPTIONS = ['', 'Basic principles observed', 'Technology concept formulated', 'Experimental proof of concept', 'Technology validated in lab', 'Technology validated in relevant environment', 'Technology demonstrated in relevant environment', 'System prototype demonstrated', 'System complete and qualified', 'Actual system proven in operational environment'];
 const IPC_CODES = ['A01 - Agriculture', 'A61 - Medical/Pharma', 'B01 - Physical/Chemical', 'B29 - Working of Plastics', 'B32 - Layered Products', 'C04 - Cement/Concrete', 'C07 - Organic Chemistry', 'C08 - Organic Polymers', 'C09 - Dyes/Paints', 'C10 - Petroleum/Fuel', 'C12 - Biochemistry', 'G01 - Measuring', 'G06 - Computing', 'G16 - ICT for Life Sciences', 'H01 - Basic Electrical', 'H04 - Electric Communication'];
 const CR_OPTIONS = ['Concept', 'Prototype', 'Validated', 'Pilot', 'Market Ready', 'Commercial'];
+
+// Maps UI labels → backend enum values
+const DOMAIN_MAP: Record<string, string> = {
+  'Artificial Intelligence': 'AI_ML', 'Biotechnology': 'BIOTECH', 'Clean Technology': 'CLEAN_TECH',
+  'Materials Science': 'MATERIALS', 'Semiconductor': 'SEMICONDUCTOR', 'Healthcare AI': 'HEALTHCARE',
+  'Energy Storage': 'ENERGY', 'Cybersecurity': 'IT_SOFTWARE', 'Robotics': 'MANUFACTURING',
+  'Quantum Technology': 'OTHER', 'Nanotechnology': 'NANOTECHNOLOGY', 'Aerospace': 'DEFENSE',
+  'Agriculture Technology': 'AGRICULTURE', 'Construction Technology': 'MANUFACTURING',
+  'Defense Technology': 'DEFENSE', 'Financial Technology': 'IT_SOFTWARE',
+  'Photonics': 'OTHER', 'Telecommunications': 'IT_SOFTWARE',
+};
+
+const STATUS_MAP: Record<string, string> = {
+  'Filed': 'FILED', 'Pending': 'FILED', 'Granted': 'GRANTED', 'Licensed': 'LICENSED',
+  'Abandoned': 'ABANDONED', 'Expired': 'EXPIRED', 'Under Opposition': 'FILED',
+};
 
 interface FormData {
   patentNumber: string; title: string; country: string; status: string;
@@ -95,9 +112,38 @@ export const PatentUploadPage: React.FC = () => {
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 2200));
-    setSubmitting(false);
-    setSubmitted(true);
+    try {
+      // Map frontend form fields → backend field names
+      const payload = {
+        title: form.title,
+        patentNumber: form.patentNumber || null,
+        status: STATUS_MAP[form.status] || 'FILED',
+        filingDate: form.filingDate || null,
+        grantDate: form.grantDate || null,
+        expiryDate: form.expiryDate || null,
+        country: form.country,
+        abstract: form.abstract,
+        description: form.description || null,
+        claims: form.claims || null,
+        domain: DOMAIN_MAP[form.technologyDomain] || 'OTHER',
+        keywords: form.keywords ? form.keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : [],
+        ipcCodes: form.ipcCode ? [form.ipcCode] : [],
+        cpcCodes: form.cpcCode ? [form.cpcCode] : [],
+        trl: form.trl,
+        isListed: form.isListed,
+        askingPrice: form.listingPrice ? parseFloat(form.listingPrice) : null,
+        royaltyRate: form.royaltyRate ? parseFloat(form.royaltyRate) : null,
+        coInventors: form.inventors.filter(Boolean),
+      };
+
+      await api.post('/patents', payload);
+      setSubmitting(false);
+      setSubmitted(true);
+    } catch (err: any) {
+      setSubmitting(false);
+      const msg = err.response?.data?.message || 'Failed to submit patent. Please try again.';
+      alert(msg);
+    }
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {

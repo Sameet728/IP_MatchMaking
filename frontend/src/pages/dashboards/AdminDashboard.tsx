@@ -3,9 +3,9 @@ import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { Users, Building2, FileText, DollarSign, Shield, Activity, TrendingUp, AlertTriangle, CheckCircle, ArrowRight, Settings, Eye } from 'lucide-react';
 import { StatCard, SectionHeader, ProgressBar } from '../../components/ui/StatCard';
-import { PLATFORM_STATS, MOCK_USERS, MOCK_PATENTS, UNIVERSITY_DEPARTMENTS, REVENUE_TREND } from '../../data/mockData';
 import { formatCurrency, getStatusBadgeClass, formatRelativeTime } from '../../lib/utils';
 import { Link } from 'react-router-dom';
+import { useFetch } from '../../hooks/useApi';
 
 const GROWTH_DATA = [
   { month: 'Jan', users: 820, patents: 310, deals: 38 },
@@ -34,6 +34,16 @@ const AUDIT_LOGS = [
 ];
 
 export const AdminDashboard: React.FC = () => {
+  const { data: statsData } = useFetch<any>('/admin/stats');
+  const { data: auditResp } = useFetch<any>('/admin/audit-logs?limit=5');
+  const logs = (auditResp?.data || auditResp || AUDIT_LOGS).slice(0, 5);
+
+  // Derive summary numbers from grouped stats
+  const totalUsers = statsData?.users?.reduce((s: number, u: any) => s + u.count, 0) ?? '—';
+  const totalPatents = statsData?.patents?.reduce((s: number, p: any) => s + p.count, 0) ?? '—';
+  const totalRevenue = statsData?.royalties?.total ?? 0;
+  const activeDeals = statsData?.deals?.find((d: any) => d.status === 'ACTIVE')?.count ?? '—';
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -54,10 +64,10 @@ export const AdminDashboard: React.FC = () => {
       {/* Platform KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Users', value: PLATFORM_STATS.totalUsers, icon: <Users size={15} />, change: 14, trend: 'up' as const },
-          { label: 'Total Patents', value: PLATFORM_STATS.totalPatents, icon: <FileText size={15} />, change: 12, trend: 'up' as const },
-          { label: 'Platform Revenue', value: PLATFORM_STATS.totalRevenue, isCurrency: true, icon: <DollarSign size={15} />, change: 38, trend: 'up' as const },
-          { label: 'Active Deals', value: PLATFORM_STATS.activeDeals, icon: <Activity size={15} />, change: 7, trend: 'up' as const },
+          { label: 'Total Users', value: totalUsers, icon: <Users size={15} />, change: 14, trend: 'up' as const },
+          { label: 'Total Patents', value: totalPatents, icon: <FileText size={15} />, change: 12, trend: 'up' as const },
+          { label: 'Platform Revenue', value: totalRevenue, isCurrency: true, icon: <DollarSign size={15} />, change: 38, trend: 'up' as const },
+          { label: 'Active Deals', value: activeDeals, icon: <Activity size={15} />, change: 7, trend: 'up' as const },
         ].map((kpi, i) => (
           <motion.div key={kpi.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
             <StatCard {...kpi} changeLabel="MoM" />
@@ -141,14 +151,15 @@ export const AdminDashboard: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="card">
           <SectionHeader title="Audit Log" subtitle="Recent platform events" action={<Link to="/admin/logs" className="btn-ghost text-xs">View all</Link>} />
           <div className="space-y-2">
-            {AUDIT_LOGS.map((log, i) => {
+            {logs.map((log: any, i: number) => {
               const icons = { success: <CheckCircle size={13} className="text-success" />, info: <Activity size={13} className="text-accent" />, warning: <AlertTriangle size={13} className="text-warning" />, danger: <AlertTriangle size={13} className="text-danger" /> };
+              const logType = log.type || 'info';
               return (
                 <div key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-navy-50 transition-colors">
-                  <div className="mt-0.5 shrink-0">{icons[log.type as keyof typeof icons]}</div>
+                  <div className="mt-0.5 shrink-0">{icons[logType as keyof typeof icons] || icons.info}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-text-primary line-clamp-2">{log.action}</div>
-                    <div className="text-[10px] text-text-muted mt-0.5">{log.user} · {formatRelativeTime(log.time)}</div>
+                    <div className="text-xs text-text-primary line-clamp-2">{log.action || log.description}</div>
+                    <div className="text-[10px] text-text-muted mt-0.5">{log.user || log.userName} · {formatRelativeTime(log.time || log.createdAt)}</div>
                   </div>
                 </div>
               );

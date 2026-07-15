@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuthStore } from '../../store/authStore';
+import api from '../../lib/api';
 import { Loader2, RefreshCw } from 'lucide-react';
 
 export const OTPPage: React.FC = () => {
@@ -84,14 +84,23 @@ export const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email) return setError('Email is required');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
-    setSent(true);
+    setError('');
+    
+    try {
+      await api.post('/auth/forgot-password', { email });
+      setSent(true);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to send reset link');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

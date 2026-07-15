@@ -22,13 +22,26 @@ export const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const formData = new FormData(e.currentTarget);
+      const payload = {
+        name: formData.get('name'),
+        designation: formData.get('designation'),
+        phone: formData.get('phone'),
+        bio: formData.get('bio'),
+      };
+      await api.patch('/users/me', payload);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    }, 1000);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSubscribe = async (planId: string) => {
@@ -74,7 +87,7 @@ export const SettingsPage: React.FC = () => {
         {/* Content Area */}
         <div className="flex-1 bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
           {activeTab === 'profile' && (
-            <div className="p-6 md:p-8">
+            <form className="p-6 md:p-8" onSubmit={handleSave}>
               <h2 className="text-lg font-bold text-text-primary mb-6">Profile Information</h2>
               
               <div className="flex items-center gap-6 mb-8">
@@ -82,7 +95,7 @@ export const SettingsPage: React.FC = () => {
                   {user?.name?.charAt(0) || 'U'}
                 </div>
                 <div>
-                  <button className="btn-secondary text-sm gap-2 mb-2">
+                  <button type="button" className="btn-secondary text-sm gap-2 mb-2">
                     <Upload size={16} /> Upload New Avatar
                   </button>
                   <p className="text-xs text-text-muted">JPG, GIF or PNG. Max size of 800K.</p>
@@ -92,36 +105,36 @@ export const SettingsPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Full Name</label>
-                  <input type="text" defaultValue={user?.name} className="input w-full" />
+                  <input type="text" name="name" defaultValue={user?.name} className="input w-full" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Email Address</label>
-                  <input type="email" defaultValue={user?.email} className="input w-full" disabled />
+                  <input type="email" name="email" defaultValue={user?.email} className="input w-full" disabled />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Designation</label>
-                  <input type="text" defaultValue={(user as any)?.designation || 'Lead Researcher'} className="input w-full" />
+                  <input type="text" name="designation" defaultValue={(user as any)?.designation || 'Lead Researcher'} className="input w-full" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Phone</label>
-                  <input type="tel" defaultValue="+1 (555) 000-0000" className="input w-full" />
+                  <input type="tel" name="phone" defaultValue={(user as any)?.phone || '+1 (555) 000-0000'} className="input w-full" />
                 </div>
               </div>
 
               <div className="mb-8">
                 <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Bio</label>
-                <textarea rows={4} className="input w-full" defaultValue="Passionate researcher focused on sustainable energy and solid-state battery technology." />
+                <textarea name="bio" rows={4} className="input w-full" defaultValue={(user as any)?.bio || "Passionate researcher focused on sustainable energy and solid-state battery technology."} />
               </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t border-border">
-                <button className="btn-secondary">Cancel</button>
-                <button onClick={handleSave} disabled={isSaving} className="btn-primary w-32 flex justify-center">
+                <button type="button" className="btn-secondary">Cancel</button>
+                <button type="submit" disabled={isSaving} className="btn-primary w-32 flex justify-center">
                   {isSaving ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (
                     saved ? <><CheckCircle2 size={16} className="mr-2" /> Saved</> : <><Save size={16} className="mr-2" /> Save Changes</>
                   )}
                 </button>
               </div>
-            </div>
+            </form>
           )}
 
           {activeTab === 'billing' && (

@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Handshake, Search, AlertTriangle, Eye, DollarSign } from 'lucide-react';
-import { MOCK_DEALS } from '../../data/mockData';
+import { useFetch } from '../../hooks/useApi';
 import { cn, formatCurrency } from '../../lib/utils';
 import { SectionHeader } from '../../components/ui/StatCard';
 
 export const DealAdminPage: React.FC = () => {
   const [search, setSearch] = useState('');
 
-  const filteredDeals = MOCK_DEALS.filter(d => 
-    !search || d.patentTitle.toLowerCase().includes(search.toLowerCase()) || d.licenseeName.toLowerCase().includes(search.toLowerCase())
+  const { data: fetchedDeals, loading } = useFetch<any[]>('/deals');
+  const deals = fetchedDeals || [];
+
+  const filteredDeals = deals.filter(d => 
+    !search || (d.patents?.[0]?.title || '').toLowerCase().includes(search.toLowerCase()) || (d.buyer?.name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

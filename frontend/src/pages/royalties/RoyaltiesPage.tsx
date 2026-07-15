@@ -6,7 +6,7 @@ import {
   Download, Filter, Search, Calendar, Building2, ArrowRight,
   BarChart3, TrendingDown, RefreshCw
 } from 'lucide-react';
-import { MOCK_ROYALTIES, REVENUE_TREND } from '../../data/mockData';
+import { useFetch } from '../../hooks/useApi';
 import { cn, formatCurrency, formatDate, getStatusBadgeClass } from '../../lib/utils';
 import { StatCard, SectionHeader, ProgressBar } from '../../components/ui/StatCard';
 import {
@@ -35,16 +35,18 @@ export const RoyaltiesPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [periodFilter, setPeriodFilter] = useState('All');
 
-  const filtered = MOCK_ROYALTIES.filter(r => {
+  const { data: fetchedRoyalties, loading } = useFetch<any[]>('/royalties');
+  const royalties = fetchedRoyalties || [];
+
+  const filtered = royalties.filter(r => {
     const q = search.toLowerCase();
     return (statusFilter === 'All' || r.status === statusFilter) &&
-      (periodFilter === 'All' || r.period.includes(periodFilter)) &&
-      (!q || r.patentTitle.toLowerCase().includes(q) || r.licenseeName.toLowerCase().includes(q));
+      (!q || (r.deal?.patents?.[0]?.title || '').toLowerCase().includes(q) || (r.deal?.buyer?.name || '').toLowerCase().includes(q));
   });
 
-  const totalReceived = MOCK_ROYALTIES.filter(r => r.status === 'Received').reduce((s, r) => s + r.amount, 0);
-  const totalPending = MOCK_ROYALTIES.filter(r => r.status === 'Pending').reduce((s, r) => s + r.amount, 0);
-  const totalOverdue = MOCK_ROYALTIES.filter(r => r.status === 'Overdue').reduce((s, r) => s + r.amount, 0);
+  const totalReceived = royalties.filter(r => r.status === 'PAID').reduce((s: number, r: any) => s + (r.amount || 0), 0);
+  const totalPending = royalties.filter(r => r.status === 'PENDING').reduce((s: number, r: any) => s + (r.amount || 0), 0);
+  const totalOverdue = royalties.filter(r => r.status === 'OVERDUE').reduce((s: number, r: any) => s + (r.amount || 0), 0);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

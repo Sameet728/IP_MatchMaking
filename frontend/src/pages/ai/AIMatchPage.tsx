@@ -8,6 +8,7 @@ import {
   AlertTriangle, Info, X, SlidersHorizontal, MapPin, CheckCircle2, Mail
 } from 'lucide-react';
 import { useFetch } from '../../hooks/useApi';
+import api from '../../lib/api';
 import type { Patent } from '../../types';
 import { cn, formatCurrency } from '../../lib/utils';
 import { SectionHeader, ProgressBar } from '../../components/ui/StatCard';
@@ -34,7 +35,7 @@ export const AIMatchPage: React.FC = () => {
     }
   }, [MOCK_PATENTS, selectedPatent]);
 
-  const { data: fetchedMatches, loading: matchesLoading } = useFetch<any[]>(selectedPatent ? `/ai/match/${selectedPatent.id}` : '', [selectedPatent?.id]);
+  const { data: fetchedMatches, loading: matchesLoading, refetch: refetchMatches } = useFetch<any[]>(selectedPatent ? `/ai/match/${selectedPatent.id}` : '', [selectedPatent?.id]);
   const matches = fetchedMatches || [];
 
   const [tab, setTab] = useState<Tab>('Patent → Company');
@@ -57,11 +58,33 @@ export const AIMatchPage: React.FC = () => {
   }, [matches, search, sector, minScore]);
 
   const handleRun = async () => {
+    if (!selectedPatent) return;
     setRunning(true);
     setRan(false);
-    await new Promise(r => setTimeout(r, 2000));
-    setRunning(false);
-    setRan(true);
+    try {
+      await api.post(`/ai/analyze/${selectedPatent.id}`);
+      const interval = setInterval(async () => {
+        try {
+          const res = await api.get(`/ai/analyze/${selectedPatent.id}/status`);
+          if (res.data.success) {
+            const status = res.data.data?.status;
+            if (status === 'completed') {
+              clearInterval(interval);
+              await refetchMatches();
+              setRunning(false);
+              setRan(true);
+            } else if (status === 'failed') {
+              clearInterval(interval);
+              setRunning(false);
+              alert('AI Match failed.');
+            }
+          }
+        } catch (e) { }
+      }, 3000);
+    } catch (err) {
+      setRunning(false);
+      alert('Failed to start AI Match');
+    }
   };
 
   const radarData = RADAR_KEYS.map((k, i) => ({
