@@ -163,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             {ROLE_LABELS[role]}
           </span>
           <div className="text-xs text-navy-300 font-medium mt-0.5 truncate">{user.name}</div>
-          <div className="text-[10px] text-navy-500 truncate">{user.organization || 'Independent'}</div>
+          <div className="text-[10px] text-navy-500 truncate">{typeof user.organization === 'string' ? user.organization : (user.organization as any)?.name || 'Independent'}</div>
         </div>
       )}
 

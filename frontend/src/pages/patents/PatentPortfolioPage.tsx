@@ -263,7 +263,7 @@ export const PatentPortfolioPage: React.FC = () => {
                       </td>
                       <td className="max-w-[280px]">
                         <div className="font-semibold text-xs text-text-primary line-clamp-2 leading-tight">{p.title}</div>
-                        <div className="text-[11px] text-text-muted mt-0.5">{p.patentNumber} · {p.assignee}</div>
+                        <div className="text-[11px] text-text-muted mt-0.5">{p.patentNumber} · {typeof p.assignee === 'string' ? p.assignee : (p.assignee as any)?.name || p.organization?.name || 'Unknown'}</div>
                       </td>
                       <td className="text-xs text-text-muted whitespace-nowrap">{p.technologyDomain || p.domain}</td>
                       <td>
@@ -338,7 +338,7 @@ export const PatentPortfolioPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="text-[11px] text-text-muted mb-3">{p.assignee} · {p.domain || p.technologyDomain}</div>
+                  <div className="text-[11px] text-text-muted mb-3">{typeof p.assignee === 'string' ? p.assignee : (p.assignee as any)?.name || p.organization?.name || 'Unknown'} · {p.domain || p.technologyDomain}</div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-border">
                     <span className="text-xs font-bold text-text-primary">{p.listingPrice ? formatCurrency(p.listingPrice) : '—'}</span>

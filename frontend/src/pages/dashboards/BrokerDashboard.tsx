@@ -37,7 +37,7 @@ export const BrokerDashboard: React.FC = () => {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="page-title">Broker Dashboard</h1>
-            <p className="text-text-muted text-sm mt-1">{user?.name} · {user?.organization || 'Independent'} · {profile?.specializations?.join(', ')}</p>
+            <p className="text-text-muted text-sm mt-1">{user?.name} · {typeof user?.organization === 'string' ? user.organization : (user?.organization as any)?.name || 'Independent'} · {profile?.specializations?.join(', ')}</p>
           </div>
           <div className="flex gap-2">
             <Link to="/deals" className="btn-primary text-xs">View Active Deals</Link>

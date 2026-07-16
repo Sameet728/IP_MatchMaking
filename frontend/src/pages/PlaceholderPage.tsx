@@ -45,7 +45,7 @@ export const ProfileSettingsPage: React.FC = () => {
           <div className="grid sm:grid-cols-2 gap-4">
             <div><label className="label">Full Name</label><input className="input" defaultValue={user?.name} /></div>
             <div><label className="label">Email</label><input className="input" defaultValue={user?.email} disabled /></div>
-            <div><label className="label">Organization</label><input className="input" defaultValue={user?.organization} /></div>
+            <div><label className="label">Organization</label><input className="input" defaultValue={typeof user?.organization === 'string' ? user.organization : (user?.organization as any)?.name || ''} /></div>
             <div><label className="label">Role</label><input className="input" defaultValue={user?.role} disabled /></div>
           </div>
           <button className="btn-primary mt-4">Save Changes</button>
